@@ -1,0 +1,40 @@
+# ── Python / Backend ────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+venv/
+env/
+.uv/
+
+# ── Node / Frontend ────────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# ── Environment / Secrets ──────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── IDE / Editor ───────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Logs ───────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ── Alembic ────────────────────────────────────────────────────────────
+# Keep migrations tracked, ignore stamps
+alembic/versions/__pycache__/
