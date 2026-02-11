@@ -1,215 +1,197 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { motion } from "motion/react";
-import {
-    Plus,
-    Building2,
-    Users,
-    Clock,
-    ArrowRight,
-    UserPlus,
-} from "lucide-react";
-import Navbar from "@/components/Navbar";
-import api from "@/api/client";
+import { Users, Calendar, DollarSign, ArrowUpRight, ArrowDownRight, TrendingUp } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-interface Workspace {
-    id: string;
-    business_name: string;
-    address: string;
-    timezone: string;
-    contact_email: string;
-}
+const data = [
+    { name: 'Mon', total: 1200 },
+    { name: 'Tue', total: 2100 },
+    { name: 'Wed', total: 1800 },
+    { name: 'Thu', total: 2400 },
+    { name: 'Fri', total: 3200 },
+    { name: 'Sat', total: 3800 },
+    { name: 'Sun', total: 2800 },
+];
 
 export default function Dashboard() {
-    const { user } = useAuth();
-    const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        api.get("/workspaces")
-            .then((res) => setWorkspaces(res.data))
-            .catch(() => { })
-            .finally(() => setLoading(false));
-    }, []);
-
-    const isAdmin = user?.role === "admin";
-    const greeting = () => {
-        const hour = new Date().getHours();
-        if (hour < 12) return "Good morning";
-        if (hour < 17) return "Good afternoon";
-        return "Good evening";
-    };
-
     return (
-        <div className="min-h-screen bg-background">
-            <Navbar />
+        <div className="space-y-8">
+            <div className="flex flex-col sm:flex-row items-baseline justify-between gap-4">
+                <div className="space-y-1">
+                    <h2 className="text-3xl font-heading font-medium tracking-tight">Dashboard</h2>
+                    <p className="text-muted-foreground">Welcome back, here's what's happening today.</p>
+                </div>
+                {/* Date picker could go here */}
+            </div>
 
-            <main className="mx-auto max-w-6xl px-6 py-8">
-                {/* ── Header ──────────────────────────────────────── */}
-                <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5 }}
-                    className="mb-8"
-                >
-                    <h1 className="editorial-heading text-3xl text-foreground sm:text-4xl">
-                        {greeting()},{" "}
-                        <span className="text-brand">
-                            {user?.full_name?.split(" ")[0]}
-                        </span>
-                    </h1>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                        Here's an overview of your operations.
-                    </p>
-                </motion.div>
-
-                {/* ── Stats Row ────────────────────────────────────── */}
-                <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.1 }}
-                    className="mb-8 grid gap-4 sm:grid-cols-3"
-                >
-                    {[
-                        {
-                            icon: Building2,
-                            label: "Workspaces",
-                            value: loading ? "—" : workspaces.length,
-                        },
-                        {
-                            icon: Users,
-                            label: "Staff Members",
-                            value: "—",
-                        },
-                        {
-                            icon: Clock,
-                            label: "Last Active",
-                            value: "Just now",
-                        },
-                    ].map((stat, i) => (
-                        <div
-                            key={stat.label}
-                            className="flex items-center gap-4 rounded-xl border border-border/50 bg-surface-card p-5"
-                        >
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand/10 text-brand">
-                                <stat.icon className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <p className="text-2xl font-bold text-foreground">
-                                    {stat.value}
-                                </p>
-                                <p className="text-xs text-muted-foreground">{stat.label}</p>
-                            </div>
-                        </div>
-                    ))}
-                </motion.div>
-
-                {/* ── Quick Actions ────────────────────────────────── */}
-                {isAdmin && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 16 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 0.15 }}
-                        className="mb-8 flex flex-wrap gap-3"
-                    >
-                        <Link to="/workspace/new">
-                            <Button className="btn-glow h-10 gap-2 bg-brand font-semibold text-white hover:bg-brand-hover">
-                                <Plus className="h-4 w-4" />
-                                New Workspace
-                            </Button>
-                        </Link>
-                    </motion.div>
-                )}
-
-                {/* ── Workspaces ───────────────────────────────────── */}
-                <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
-                >
-                    <div className="mb-4 flex items-center justify-between">
-                        <h2 className="font-heading text-lg font-semibold text-foreground">
-                            Your Workspaces
-                        </h2>
-                        {workspaces.length > 0 && (
-                            <span className="text-xs text-muted-foreground">
-                                {workspaces.length} workspace{workspaces.length !== 1 ? "s" : ""}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card className="hover:shadow-md transition-shadow">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">$45,231.89</div>
+                        <p className="text-xs text-muted-foreground flex items-center mt-1">
+                            <span className="text-emerald-500 font-medium flex items-center mr-1">
+                                +20.1% <ArrowUpRight className="h-3 w-3" />
                             </span>
-                        )}
-                    </div>
+                            from last month
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card className="hover:shadow-md transition-shadow">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Bookings</CardTitle>
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">+2350</div>
+                        <p className="text-xs text-muted-foreground flex items-center mt-1">
+                            <span className="text-emerald-500 font-medium flex items-center mr-1">
+                                +180.1% <ArrowUpRight className="h-3 w-3" />
+                            </span>
+                            from last month
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card className="hover:shadow-md transition-shadow">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Active Customers</CardTitle>
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">+12,234</div>
+                        <p className="text-xs text-muted-foreground flex items-center mt-1">
+                            <span className="text-red-500 font-medium flex items-center mr-1">
+                                -4% <ArrowDownRight className="h-3 w-3" />
+                            </span>
+                            from last month
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card className="hover:shadow-md transition-shadow">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Sales</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">+573</div>
+                        <p className="text-xs text-muted-foreground flex items-center mt-1">
+                            <span className="text-emerald-500 font-medium flex items-center mr-1">
+                                +201 since last hour
+                            </span>
+                        </p>
+                    </CardContent>
+                </Card>
+            </div>
 
-                    {loading ? (
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            {[1, 2, 3].map((n) => (
-                                <div
-                                    key={n}
-                                    className="h-40 animate-pulse rounded-xl border border-border/30 bg-surface-card"
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                <Card className="col-span-4 hover:shadow-md transition-shadow">
+                    <CardHeader>
+                        <CardTitle>Overview</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pl-2">
+                        <ResponsiveContainer width="100%" height={350}>
+                            <AreaChart data={data}>
+                                <defs>
+                                    <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8} />
+                                        <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <XAxis
+                                    dataKey="name"
+                                    stroke="#888888"
+                                    fontSize={12}
+                                    tickLine={false}
+                                    axisLine={false}
                                 />
-                            ))}
+                                <YAxis
+                                    stroke="#888888"
+                                    fontSize={12}
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tickFormatter={(value) => `$${value}`}
+                                />
+                                <Tooltip />
+                                <Area
+                                    type="monotone"
+                                    dataKey="total"
+                                    stroke="#8884d8"
+                                    fillOpacity={1}
+                                    fill="url(#colorTotal)"
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+                <Card className="col-span-3 hover:shadow-md transition-shadow">
+                    <CardHeader>
+                        <CardTitle>Recent Sales</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                            You made 265 sales this month.
+                        </p>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-8">
+                            <div className="flex items-center">
+                                <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium text-primary">
+                                    OM
+                                </div>
+                                <div className="ml-4 space-y-1">
+                                    <p className="text-sm font-medium leading-none">Olivia Martin</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        olivia.martin@email.com
+                                    </p>
+                                </div>
+                                <div className="ml-auto font-medium">+$1,999.00</div>
+                            </div>
+                            <div className="flex items-center">
+                                <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium text-primary">
+                                    JL
+                                </div>
+                                <div className="ml-4 space-y-1">
+                                    <p className="text-sm font-medium leading-none">Jackson Lee</p>
+                                    <p className="text-sm text-muted-foreground">jackson.lee@email.com</p>
+                                </div>
+                                <div className="ml-auto font-medium">+$39.00</div>
+                            </div>
+                            <div className="flex items-center">
+                                <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium text-primary">
+                                    IN
+                                </div>
+                                <div className="ml-4 space-y-1">
+                                    <p className="text-sm font-medium leading-none">Isabella Nguyen</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        isabella.nguyen@email.com
+                                    </p>
+                                </div>
+                                <div className="ml-auto font-medium">+$299.00</div>
+                            </div>
+                            <div className="flex items-center">
+                                <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium text-primary">
+                                    WK
+                                </div>
+                                <div className="ml-4 space-y-1">
+                                    <p className="text-sm font-medium leading-none">William Kim</p>
+                                    <p className="text-sm text-muted-foreground">will@email.com</p>
+                                </div>
+                                <div className="ml-auto font-medium">+$99.00</div>
+                            </div>
+                            <div className="flex items-center">
+                                <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center text-sm font-medium text-primary">
+                                    SD
+                                </div>
+                                <div className="ml-4 space-y-1">
+                                    <p className="text-sm font-medium leading-none">Sofia Davis</p>
+                                    <p className="text-sm text-muted-foreground">sofia.davis@email.com</p>
+                                </div>
+                                <div className="ml-auto font-medium">+$39.00</div>
+                            </div>
                         </div>
-                    ) : workspaces.length === 0 ? (
-                        <div className="rounded-xl border border-border/50 bg-surface-card p-12 text-center">
-                            <Building2 className="mx-auto mb-4 h-10 w-10 text-muted-foreground/30" />
-                            <h3 className="font-heading text-lg font-semibold text-foreground">
-                                No workspaces yet
-                            </h3>
-                            <p className="mt-2 text-sm text-muted-foreground">
-                                {isAdmin
-                                    ? "Create your first workspace to get started."
-                                    : "You haven't been assigned to any workspaces yet."}
-                            </p>
-                            {isAdmin && (
-                                <Link to="/workspace/new">
-                                    <Button className="btn-glow mt-6 gap-2 bg-brand font-semibold text-white hover:bg-brand-hover">
-                                        <Plus className="h-4 w-4" />
-                                        Create Workspace
-                                    </Button>
-                                </Link>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            {workspaces.map((ws, i) => (
-                                <motion.div
-                                    key={ws.id}
-                                    initial={{ opacity: 0, y: 12 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.4, delay: 0.05 * i }}
-                                >
-                                    <Card className="group border-border/50 bg-surface-card transition-all hover:border-brand/20 hover:shadow-[0_0_30px_rgba(80,70,229,0.06)]">
-                                        <CardHeader className="pb-3">
-                                            <CardTitle className="flex items-center gap-2 font-heading text-base font-semibold text-foreground">
-                                                <Building2 className="h-4 w-4 text-brand" />
-                                                {ws.business_name}
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div className="space-y-1.5 text-xs text-muted-foreground">
-                                                <p>📍 {ws.address}</p>
-                                                <p>🕐 {ws.timezone}</p>
-                                                <p>✉️ {ws.contact_email}</p>
-                                            </div>
-                                            <div className="mt-4 flex items-center justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-8 gap-1 text-xs text-brand hover:text-brand-hover"
-                                                >
-                                                    View
-                                                    <ArrowRight className="h-3 w-3" />
-                                                </Button>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                </motion.div>
-                            ))}
-                        </div>
-                    )}
-                </motion.div>
-            </main>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }
