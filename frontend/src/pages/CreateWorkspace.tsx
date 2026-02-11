@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Navbar } from "@/components/Navbar";
+import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,14 +93,14 @@ export default function CreateWorkspace() {
                                     <div key={i} className="flex items-center gap-3">
                                         <CheckCircle2
                                             className={`h-4 w-4 shrink-0 transition-colors ${step.done
-                                                    ? "text-amber-brand"
-                                                    : "text-muted-foreground/30"
+                                                ? "text-brand"
+                                                : "text-muted-foreground/30"
                                                 }`}
                                         />
                                         <span
                                             className={`text-sm ${step.done
-                                                    ? "text-foreground"
-                                                    : "text-muted-foreground"
+                                                ? "text-foreground"
+                                                : "text-muted-foreground"
                                                 }`}
                                         >
                                             {step.label}
@@ -145,7 +145,7 @@ export default function CreateWorkspace() {
                                 <form onSubmit={handleSubmit} className="space-y-6">
                                     <div className="space-y-2">
                                         <Label htmlFor="businessName" className="flex items-center gap-1.5">
-                                            <Building2 className="h-3.5 w-3.5 text-amber-brand" />
+                                            <Building2 className="h-3.5 w-3.5 text-brand" />
                                             Business Name
                                         </Label>
                                         <Input
@@ -159,7 +159,7 @@ export default function CreateWorkspace() {
 
                                     <div className="space-y-2">
                                         <Label htmlFor="address" className="flex items-center gap-1.5">
-                                            <MapPin className="h-3.5 w-3.5 text-amber-brand" />
+                                            <MapPin className="h-3.5 w-3.5 text-brand" />
                                             Address
                                         </Label>
                                         <Input
@@ -173,7 +173,7 @@ export default function CreateWorkspace() {
 
                                     <div className="space-y-2">
                                         <Label htmlFor="timezone" className="flex items-center gap-1.5">
-                                            <Globe className="h-3.5 w-3.5 text-amber-brand" />
+                                            <Globe className="h-3.5 w-3.5 text-brand" />
                                             Timezone
                                         </Label>
                                         <select
@@ -192,7 +192,7 @@ export default function CreateWorkspace() {
 
                                     <div className="space-y-2">
                                         <Label htmlFor="contactEmail" className="flex items-center gap-1.5">
-                                            <Mail className="h-3.5 w-3.5 text-amber-brand" />
+                                            <Mail className="h-3.5 w-3.5 text-brand" />
                                             Contact Email
                                         </Label>
                                         <Input
@@ -207,11 +207,11 @@ export default function CreateWorkspace() {
 
                                     <Button
                                         type="submit"
-                                        className="w-full bg-amber-brand text-charcoal-deep hover:bg-amber-hover font-semibold"
+                                        className="w-full bg-brand text-white hover:bg-brand-hover font-semibold"
                                         disabled={loading}
                                     >
                                         {loading ? (
-                                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-charcoal-deep border-t-transparent" />
+                                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                                         ) : (
                                             "Create Workspace"
                                         )}

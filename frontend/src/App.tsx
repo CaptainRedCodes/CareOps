@@ -1,32 +1,49 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import Home from "@/pages/Home";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Dashboard from "@/pages/Dashboard";
 import CreateWorkspace from "@/pages/CreateWorkspace";
 import OAuthCallback from "@/pages/OAuthCallback";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
+import VerifyEmail from "@/pages/VerifyEmail";
+import Profile from "@/pages/Profile";
+import ForceChangePassword from "@/pages/ForceChangePassword";
 
-export default function App() {
+function App() {
     return (
         <BrowserRouter>
             <AuthProvider>
                 <Routes>
-                    {/* Public */}
+                    {/* Public routes */}
+                    <Route path="/" element={<Home />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/verify-email" element={<VerifyEmail />} />
                     <Route path="/oauth/callback" element={<OAuthCallback />} />
 
-                    {/* Protected */}
+                    {/* Protected routes */}
                     <Route element={<ProtectedRoute />}>
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/workspace/new" element={<CreateWorkspace />} />
+                        <Route path="/profile" element={<Profile />} />
+                        <Route
+                            path="/force-change-password"
+                            element={<ForceChangePassword />}
+                        />
                     </Route>
 
                     {/* Fallback */}
-                    <Route path="*" element={<Navigate to="/login" replace />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </AuthProvider>
         </BrowserRouter>
     );
 }
+
+export default App;

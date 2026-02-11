@@ -31,6 +31,17 @@ class Settings(BaseSettings):
     MAX_LOGIN_ATTEMPTS: int = 5
     LOCKOUT_DURATION_MINUTES: int = 15
 
+    # SMTP (email)
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM_EMAIL: str = "noreply@careops.app"
+
+    # Token lifetimes
+    EMAIL_TOKEN_EXPIRE_HOURS: int = 24
+    INVITATION_TOKEN_EXPIRE_DAYS: int = 7
+
 
 @lru_cache
 def get_settings() -> Settings:

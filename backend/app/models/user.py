@@ -53,6 +53,30 @@ class User(Base):
         String(255), nullable=True, index=True
     )
 
+    # Email verification
+    is_email_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    email_verification_token: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+    email_verification_expires: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Password reset
+    password_reset_token: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True
+    )
+    password_reset_expires: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Staff first-login flag
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+
     failed_login_attempts: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False
     )

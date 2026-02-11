@@ -1,16 +1,28 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
-export function ProtectedRoute() {
+export default function ProtectedRoute() {
     const { user, loading } = useAuth();
 
     if (loading) {
         return (
-            <div className="flex h-screen items-center justify-center">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-brand border-t-transparent" />
+            <div className="flex min-h-screen items-center justify-center">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
             </div>
         );
     }
 
-    return user ? <Outlet /> : <Navigate to="/login" replace />;
+    if (!user) {
+        return <Navigate to="/login" replace />;
+    }
+
+    // Force staff to change password on first login
+    if (
+        user.must_change_password &&
+        window.location.pathname !== "/force-change-password"
+    ) {
+        return <Navigate to="/force-change-password" replace />;
+    }
+
+    return <Outlet />;
 }
