@@ -30,11 +30,11 @@ async def create_workspace(
 
 @router.get("", response_model=list[WorkspaceResponse])
 async def list_workspaces(
-    admin: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """List all workspaces owned by the current admin."""
-    return await svc_list_workspaces(db, admin.id)
+    return await svc_list_workspaces(db, user)
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
@@ -44,10 +44,7 @@ async def get_workspace(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a workspace by ID (admin or assigned staff)."""
-    return await svc_get_workspace(db, workspace_id)
-
-
-# ── Staff Invitations ───────────────────────────────────────────────────────
+    return await svc_get_workspace(db, workspace_id,current_user)
 
 
 @router.post(

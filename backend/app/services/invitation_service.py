@@ -51,7 +51,6 @@ async def invite_staff(
     """
     email = email.strip().lower()
 
-    # Verify workspace exists and belongs to the admin
     ws_result = await db.execute(
         select(Workspace).where(
             Workspace.id == workspace_id,
