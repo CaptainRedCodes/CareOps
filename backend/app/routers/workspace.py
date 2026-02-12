@@ -4,6 +4,8 @@ from uuid import UUID
 from app.schemas.communication import CommunicationLogOut, IntegrationCreate, IntegrationOut, IntegrationResponse, SendMessageIn
 from app.models.communication import CommunicationIntegration, CommunicationLog
 from app.services.communication_service import send_communication
+from app.schemas.conversation import MessageCreate, MessageOut
+from app.services.conversation_service import send_staff_reply
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -11,9 +13,11 @@ from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.models.user import User
 from app.schemas.invitation import InvitationResponse, InviteStaffRequest
-from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse
+from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, ActivationStatusResponse
 from app.services.invitation_service import invite_staff, list_invitations
 from app.services.workspace_service import (
+    check_activation_readiness,
+    activate_workspace as svc_activate_workspace,
     create_integration,
     create_workspace as svc_create_workspace,
     get_workspace as svc_get_workspace,
@@ -79,26 +83,6 @@ async def list_integrations(
     return result.scalars().all()
 
 
-@router.post("/{workspace_id}/send", status_code=200)
-async def send_message(
-    workspace_id: UUID,
-    payload: SendMessageIn,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """Send a communication message (email or SMS)."""
-    return await send_communication(
-        db=db,
-        workspace_id=workspace_id,
-        channel=payload.channel,
-        recipient=payload.recipient,
-        subject=payload.subject,
-        message=payload.message,
-        sent_by_staff = True,
-        automated=False
-    )
-
-
 @router.get("/{workspace_id}/logs", response_model=List[CommunicationLogOut])
 async def get_logs(
     workspace_id: UUID,
@@ -153,33 +137,41 @@ async def delete_integration(
     await remove_integration(db, workspace_id, integration_id, admin)
 
 
-@router.get("/{workspace_id}/inbox", response_model=List[CommunicationLogOut])
-async def get_inbox(
+@router.post("/{conversation_id}/reply", response_model=MessageOut)
+async def reply_to_conversation(
+    workspace_id: UUID,
+    conversation_id: UUID,
+    data: MessageCreate,  # Should include: channel, content
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    """
+    Send staff reply via email OR SMS
+    
+    The service layer:
+    1. Validates contact has this channel
+    2. Calls appropriate integration (email/SMS)
+    3. Logs message in conversation
+    4. Pauses automation
+    """
+    return await send_staff_reply(db, conversation_id, workspace_id, data, user.id)
+
+
+@router.get("/{workspace_id}/activation-status", response_model=ActivationStatusResponse)
+async def get_activation_status(
     workspace_id: UUID,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """
-    Get all messages grouped by recipient, newest first.
-    Each contact shows the full conversation.
-    """
-    result = await db.execute(
-        select(CommunicationLog)
-        .where(CommunicationLog.workspace_id == workspace_id)
-        .order_by(CommunicationLog.sent_at.asc())  # oldest first per conversation
-    )
-    logs = result.scalars().all()
+    """Check workspace activation readiness."""
+    return await check_activation_readiness(db, workspace_id)
 
-    conversations = {}
-    for log in logs:
-        if log.recipient not in conversations:
-            conversations[log.recipient] = []
-        conversations[log.recipient].append(log)
 
-    return [
-        {
-            "recipient": recipient,
-            "messages": messages
-        }
-        for recipient, messages in conversations.items()
-    ]
+@router.post("/{workspace_id}/activate", response_model=WorkspaceResponse)
+async def activate(
+    workspace_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """Activate workspace (admin only). Checks readiness first."""
+    return await svc_activate_workspace(db, workspace_id, admin)

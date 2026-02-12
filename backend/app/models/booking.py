@@ -93,3 +93,5 @@ class Booking(Base):
     # Relationships
     contact = relationship("Contact", back_populates="bookings")
     service_type = relationship("ServiceType", back_populates="bookings")
+    inventory_usage = relationship("InventoryUsage", back_populates="booking", cascade="all, delete-orphan")
+    form_submissions = relationship("FormSubmission", back_populates="booking", cascade="all, delete-orphan")

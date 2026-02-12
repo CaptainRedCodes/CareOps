@@ -7,7 +7,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from app.config import get_settings
-from app.routers import auth, oauth, workspace, bookings, contact_form, contacts, conversation
+from app.routers import auth, oauth, workspace, bookings, contact_form, contacts, conversation, inventory, workspace_forms, staff
 
 settings = get_settings()
 
@@ -31,7 +31,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=["http://localhost:5173",  # React dev server
+    "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
@@ -46,6 +47,9 @@ app.include_router(contact_form.router, prefix="/api/v1")
 app.include_router(contact_form.public_router, prefix="/api/v1")
 app.include_router(contacts.router, prefix="/api/v1")
 app.include_router(conversation.router, prefix="/api/v1")
+app.include_router(inventory.router, prefix="/api/v1")
+app.include_router(workspace_forms.router, prefix="/api/v1")
+app.include_router(staff.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["System"])

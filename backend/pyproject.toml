@@ -20,6 +20,7 @@ dependencies = [
     "aiosmtplib>=2.0.0",
     "cryptography>=46.0.4",
     "twilio>=9.10.1",
+    "python-slugify>=8.0.4",
 ]
 
 [tool.hatch.build.targets.wheel]

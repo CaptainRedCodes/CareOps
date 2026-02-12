@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, JSON, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -21,6 +21,19 @@ class StaffAssignment(Base):
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(
+        String(50), default="staff", nullable=False
+    )
+    permissions: Mapped[dict] = mapped_column(
+        JSON,
+        default=lambda: {
+            "inbox": True,
+            "bookings": True,
+            "forms": False,
+            "inventory": False,
+        },
         nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(

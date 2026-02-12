@@ -24,7 +24,9 @@ class Contact(Base):
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    source = Column(String(100), nullable=True)
     
     workspace = relationship("Workspace", back_populates="contacts")
     conversations = relationship("Conversation", back_populates="contact", cascade="all, delete-orphan")
     bookings = relationship("Booking", back_populates="contact", cascade="all, delete-orphan")
+    form_submissions = relationship("FormSubmission", back_populates="contact", cascade="all, delete-orphan")

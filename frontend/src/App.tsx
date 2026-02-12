@@ -16,6 +16,12 @@ import WorkspaceView from "./pages/WorskpaceView";
 import Communication from "@/pages/Communication";
 import ContactForms from "@/pages/ContactForms";
 import Bookings from "@/pages/Bookings";
+import Inventory from "@/pages/Inventory";
+import Staff from "@/pages/Staff";
+import WorkspaceSettings from "@/pages/WorkspaceSettings";
+import Contacts from "@/pages/Contacts";
+import PublicBooking from "@/pages/PublicBooking";
+import PublicContactForm from "@/pages/PublicContactForm";
 import WorkspaceLayout from "@/components/layout/WorkspaceLayout";
 
 function App() {
@@ -31,6 +37,8 @@ function App() {
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/verify-email" element={<VerifyEmail />} />
                     <Route path="/oauth/callback" element={<OAuthCallback />} />
+                    <Route path="/book/:workspaceId" element={<PublicBooking />} />
+                    <Route path="/form/:slug" element={<PublicContactForm />} />
 
                     {/* Protected routes */}
                     <Route element={<ProtectedRoute />}>
@@ -43,6 +51,10 @@ function App() {
                             <Route path="communication" element={<Communication />} />
                             <Route path="forms" element={<ContactForms />} />
                             <Route path="bookings" element={<Bookings />} />
+                            <Route path="inventory" element={<Inventory />} />
+                            <Route path="staff" element={<Staff />} />
+                            <Route path="settings" element={<WorkspaceSettings />} />
+                            <Route path="contacts" element={<Contacts />} />
                         </Route>
                     </Route>
 

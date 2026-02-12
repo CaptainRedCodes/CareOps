@@ -7,7 +7,8 @@ import {
     Calendar,
     Settings,
     Users,
-    Package
+    Package,
+    UserCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils"; // Assuming utils exists, if not I'll inline helper
 
@@ -39,7 +40,12 @@ export default function Sidebar() {
             href: `/workspace/${workspaceId}/bookings`,
             icon: Calendar
         },
-        // Placeholders for future
+        {
+            name: "Contacts",
+            href: `/workspace/${workspaceId}/contacts`,
+            icon: UserCheck
+        },
+        // Resources
         {
             name: "Inventory",
             href: `/workspace/${workspaceId}/inventory`,

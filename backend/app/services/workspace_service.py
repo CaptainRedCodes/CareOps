@@ -174,3 +174,118 @@ async def remove_integration(
     await db.commit()
 
     return {"detail": "Integration removed successfully."}
+
+
+async def check_activation_readiness(
+    db: AsyncSession,
+    workspace_id: UUID,
+) -> dict:
+    """Check if workspace meets activation requirements"""
+    from app.models.booking import ServiceType, AvailabilityRule
+    from app.schemas.workspace import ActivationCheck
+
+    result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
+    workspace = result.scalar_one_or_none()
+
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found.",
+        )
+
+    checks = []
+
+    # Check 1: Communication channel connected
+    integrations = await db.execute(
+        select(CommunicationIntegration).where(
+            CommunicationIntegration.workspace_id == workspace_id,
+            CommunicationIntegration.is_active == True
+        )
+    )
+    has_integration = bool(integrations.scalars().first())
+    checks.append(ActivationCheck(
+        name="Communication Channel",
+        passed=has_integration,
+        detail="At least one active email or SMS integration" if has_integration else "No communication channel configured"
+    ))
+
+    # Check 2: At least one booking type
+    services = await db.execute(
+        select(ServiceType).where(
+            ServiceType.workspace_id == workspace_id,
+            ServiceType.is_active == True
+        )
+    )
+    service_list = services.scalars().all()
+    has_services = len(service_list) > 0
+    checks.append(ActivationCheck(
+        name="Booking Types",
+        passed=has_services,
+        detail=f"{len(service_list)} active service(s)" if has_services else "No service types defined"
+    ))
+
+    # Check 3: Availability defined
+    has_availability = False
+    if has_services:
+        for svc in service_list:
+            rules = await db.execute(
+                select(AvailabilityRule).where(
+                    AvailabilityRule.service_type_id == svc.id,
+                    AvailabilityRule.is_active == True
+                )
+            )
+            if rules.scalars().first():
+                has_availability = True
+                break
+
+    checks.append(ActivationCheck(
+        name="Availability Defined",
+        passed=has_availability,
+        detail="Availability rules configured" if has_availability else "No availability rules found"
+    ))
+
+    can_activate = all(c.passed for c in checks)
+
+    return {
+        "is_activated": workspace.is_activated,
+        "can_activate": can_activate,
+        "checks": checks,
+    }
+
+
+async def activate_workspace(
+    db: AsyncSession,
+    workspace_id: UUID,
+    admin: User,
+) -> Workspace:
+    """Activate workspace after verifying readiness"""
+    result = await db.execute(
+        select(Workspace).where(
+            Workspace.id == workspace_id,
+            Workspace.owner_id == admin.id,
+        )
+    )
+    workspace = result.scalar_one_or_none()
+
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not own this workspace.",
+        )
+
+    if workspace.is_activated:
+        return workspace
+
+    readiness = await check_activation_readiness(db, workspace_id)
+    if not readiness["can_activate"]:
+        failed = [c.name for c in readiness["checks"] if not c.passed]
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot activate. Failed checks: {', '.join(failed)}"
+        )
+
+    workspace.is_activated = True
+    await db.commit()
+    await db.refresh(workspace)
+    return workspace
+

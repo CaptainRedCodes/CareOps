@@ -16,7 +16,7 @@ class ContactForm(Base):
     
     name = Column(String(255), nullable=False)
     slug = Column(String(255), nullable=False, unique=True)  # for public URL
-    
+    description = Column(Text, nullable=True)
     # Form configuration
     fields = Column(JSON, nullable=False)  # Array of field definitions
     
@@ -27,11 +27,16 @@ class ContactForm(Base):
     
     # Settings
     is_active = Column(Boolean, default=True)
+    status = Column(String(50), default="draft")  # draft, active, archived
     submit_button_text = Column(String(100), default="Submit")
     success_message = Column(Text, default="Thank you! We'll be in touch soon.")
     
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
-    
+    status = Column(
+        String(50),
+        default="draft",
+        nullable=False
+    ) 
     # Relationships
     workspace = relationship("Workspace", back_populates="contact_forms")

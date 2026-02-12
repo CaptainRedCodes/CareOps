@@ -2,7 +2,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,6 +25,7 @@ class Workspace(Base):
     address: Mapped[str] = mapped_column(Text, nullable=False)
     timezone: Mapped[str] = mapped_column(String(50), nullable=False, default="UTC")
     contact_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_activated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
@@ -46,6 +47,12 @@ class Workspace(Base):
     )
     contact_forms = relationship(
         "ContactForm", back_populates="workspace", cascade="all, delete-orphan"
+    )
+    inventory_items = relationship(
+        "InventoryItem", back_populates="workspace", cascade="all, delete-orphan"
+    )
+    workspace_forms = relationship(
+        "WorkspaceForm", back_populates="workspace", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
