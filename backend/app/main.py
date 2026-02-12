@@ -7,7 +7,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from app.config import get_settings
-from app.routers import auth, oauth, workspace
+from app.routers import auth, oauth, workspace, bookings, contact_form, contacts, conversation
 
 settings = get_settings()
 
@@ -40,6 +40,12 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(oauth.router, prefix="/api/v1")
 app.include_router(workspace.router, prefix="/api/v1")
+app.include_router(bookings.router, prefix="/api/v1")
+app.include_router(bookings.public_router, prefix="/api/v1")
+app.include_router(contact_form.router, prefix="/api/v1")
+app.include_router(contact_form.public_router, prefix="/api/v1")
+app.include_router(contacts.router, prefix="/api/v1")
+app.include_router(conversation.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["System"])

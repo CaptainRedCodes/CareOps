@@ -12,6 +12,11 @@ import ResetPassword from "@/pages/ResetPassword";
 import VerifyEmail from "@/pages/VerifyEmail";
 import Profile from "@/pages/Profile";
 import ForceChangePassword from "@/pages/ForceChangePassword";
+import WorkspaceView from "./pages/WorskpaceView";
+import Communication from "@/pages/Communication";
+import ContactForms from "@/pages/ContactForms";
+import Bookings from "@/pages/Bookings";
+import WorkspaceLayout from "@/components/layout/WorkspaceLayout";
 
 function App() {
     return (
@@ -32,10 +37,13 @@ function App() {
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/workspace/new" element={<CreateWorkspace />} />
                         <Route path="/profile" element={<Profile />} />
-                        <Route
-                            path="/force-change-password"
-                            element={<ForceChangePassword />}
-                        />
+                        <Route path="/force-change-password" element={<ForceChangePassword />} />
+                        <Route path="/workspace/:workspaceId" element={<WorkspaceLayout />}>
+                            <Route index element={<WorkspaceView />} />
+                            <Route path="communication" element={<Communication />} />
+                            <Route path="forms" element={<ContactForms />} />
+                            <Route path="bookings" element={<Bookings />} />
+                        </Route>
                     </Route>
 
                     {/* Fallback */}

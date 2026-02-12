@@ -1,8 +1,12 @@
+from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from app.schemas.communication import CommunicationLogOut, IntegrationCreate, IntegrationOut, IntegrationResponse, SendMessageIn
+from app.models.communication import CommunicationIntegration, CommunicationLog
+from app.services.communication_service import send_communication
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from sqlalchemy import select
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.models.user import User
@@ -10,9 +14,11 @@ from app.schemas.invitation import InvitationResponse, InviteStaffRequest
 from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse
 from app.services.invitation_service import invite_staff, list_invitations
 from app.services.workspace_service import (
+    create_integration,
     create_workspace as svc_create_workspace,
     get_workspace as svc_get_workspace,
     list_workspaces as svc_list_workspaces,
+    remove_integration,
 )
 
 router = APIRouter(prefix="/workspaces", tags=["Workspaces"])
@@ -44,7 +50,68 @@ async def get_workspace(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a workspace by ID (admin or assigned staff)."""
-    return await svc_get_workspace(db, workspace_id,current_user)
+    return await svc_get_workspace(db, workspace_id, current_user)
+
+
+@router.post("/{workspace_id}/integrations", response_model=IntegrationResponse)
+async def add_integration(
+    workspace_id: UUID,
+    data: IntegrationCreate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """Add a communication integration (admin only)."""
+    return await create_integration(db, workspace_id, data, admin)
+
+
+@router.get("/{workspace_id}/integrations", response_model=List[IntegrationOut])
+async def list_integrations(
+    workspace_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """List all communication integrations for a workspace."""
+    result = await db.execute(
+        select(CommunicationIntegration).where(
+            CommunicationIntegration.workspace_id == workspace_id
+        )
+    )
+    return result.scalars().all()
+
+
+@router.post("/{workspace_id}/send", status_code=200)
+async def send_message(
+    workspace_id: UUID,
+    payload: SendMessageIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Send a communication message (email or SMS)."""
+    return await send_communication(
+        db=db,
+        workspace_id=workspace_id,
+        channel=payload.channel,
+        recipient=payload.recipient,
+        subject=payload.subject,
+        message=payload.message,
+        sent_by_staff = True,
+        automated=False
+    )
+
+
+@router.get("/{workspace_id}/logs", response_model=List[CommunicationLogOut])
+async def get_logs(
+    workspace_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Get communication logs for a workspace."""
+    result = await db.execute(
+        select(CommunicationLog).where(
+            CommunicationLog.workspace_id == workspace_id
+        ).order_by(CommunicationLog.sent_at.desc())
+    )
+    return result.scalars().all()
 
 
 @router.post(
@@ -73,3 +140,46 @@ async def list_invitations_endpoint(
 ):
     """List all staff invitations for a workspace (admin only)."""
     return await list_invitations(db, workspace_id, admin)
+
+
+@router.delete("/{workspace_id}/integrations/{integration_id}", status_code=204)
+async def delete_integration(
+    workspace_id: UUID,
+    integration_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """Delete a communication integration (admin only)."""
+    await remove_integration(db, workspace_id, integration_id, admin)
+
+
+@router.get("/{workspace_id}/inbox", response_model=List[CommunicationLogOut])
+async def get_inbox(
+    workspace_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Get all messages grouped by recipient, newest first.
+    Each contact shows the full conversation.
+    """
+    result = await db.execute(
+        select(CommunicationLog)
+        .where(CommunicationLog.workspace_id == workspace_id)
+        .order_by(CommunicationLog.sent_at.asc())  # oldest first per conversation
+    )
+    logs = result.scalars().all()
+
+    conversations = {}
+    for log in logs:
+        if log.recipient not in conversations:
+            conversations[log.recipient] = []
+        conversations[log.recipient].append(log)
+
+    return [
+        {
+            "recipient": recipient,
+            "messages": messages
+        }
+        for recipient, messages in conversations.items()
+    ]

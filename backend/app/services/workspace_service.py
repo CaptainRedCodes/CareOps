@@ -1,7 +1,9 @@
 from uuid import UUID
 
 from app.models.staff import StaffAssignment
-from app.models.user import UserRole
+from app.models.user import User, UserRole
+from app.models.communication import CommunicationIntegration
+from app.utils.security import encrypt
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,3 +82,95 @@ async def get_workspace(db: AsyncSession, workspace_id: UUID, user) -> Workspace
         status_code=status.HTTP_403_FORBIDDEN,
         detail="You do not have access to this workspace.",
     )
+
+
+async def create_integration(
+    db: AsyncSession,
+    workspace_id: UUID,
+    data,
+    admin: User,
+):
+    result = await db.execute(
+        select(Workspace).where(
+            Workspace.id == workspace_id,
+            Workspace.owner_id == admin.id,
+        )
+    )
+    workspace = result.scalar_one_or_none()
+
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not own this workspace.",
+        )
+
+    existing = (
+        await db.execute(
+            select(CommunicationIntegration).where(
+                CommunicationIntegration.workspace_id == workspace_id,
+                CommunicationIntegration.channel == data.channel,
+                CommunicationIntegration.is_active == True,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"An active {data.channel} integration already exists.",
+        )
+    
+    integration = CommunicationIntegration(
+        workspace_id=workspace_id,
+        channel=data.channel,
+        provider=data.provider,
+        config=encrypt(data.config),
+        is_active=True,
+    )
+
+    db.add(integration)
+    await db.commit()
+    await db.refresh(integration)
+
+    return integration
+
+
+async def remove_integration(
+    db: AsyncSession,
+    workspace_id: UUID,
+    integration_id: UUID,
+    admin: User,
+):
+    result = await db.execute(
+        select(Workspace).where(
+            Workspace.id == workspace_id,
+            Workspace.owner_id == admin.id,
+        )
+    )
+    workspace = result.scalar_one_or_none()
+    if not workspace:
+        raise HTTPException(status_code=403, detail="You do not own this workspace.")
+
+    integration = await db.get(CommunicationIntegration, integration_id)
+    if not integration or integration.workspace_id != workspace_id:
+        raise HTTPException(status_code=404, detail="Integration not found.")
+
+    active_integrations = (
+        await db.execute(
+            select(CommunicationIntegration).where(
+                CommunicationIntegration.workspace_id == workspace_id,
+                CommunicationIntegration.is_active == True,
+            )
+        )
+    ).scalars().all()
+
+    if len(active_integrations) == 1 and integration.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one active communication channel must remain.",
+        )
+
+    await db.delete(integration)
+    await db.commit()
+
+    return {"detail": "Integration removed successfully."}

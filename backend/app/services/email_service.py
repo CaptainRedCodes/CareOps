@@ -1,7 +1,5 @@
 
 import logging
-from typing import Optional
-
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -14,7 +12,7 @@ async def send_email(to: str, subject: str, html_body: str) -> bool:
     """
     if not settings.SMTP_HOST or not settings.SMTP_USER:
         logger.info(
-            + f"\nEMAIL (console mode — SMTP not configured)"
+            f"\nEMAIL (console mode — SMTP not configured)"
             + f"\n   To:      {to}"
             + f"\n   Subject: {subject}"
             + f"\n   Body:\n{html_body}"
@@ -41,6 +39,40 @@ async def send_email(to: str, subject: str, html_body: str) -> bool:
             start_tls=True,
         )
         logger.info(f"Email sent to {to}: {subject}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send email to {to}: {e}")
+        return False
+
+async def send_email_from_admin(
+    smtp_host: str,
+    smtp_port: int,
+    username: str,
+    password: str,
+    from_email: str,
+    to: str,
+    subject: str,
+    html_body: str,
+) -> bool:
+    try:
+        import aiosmtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        message = MIMEMultipart("alternative")
+        message["From"] = from_email
+        message["To"] = to
+        message["Subject"] = subject
+        message.attach(MIMEText(html_body, "html"))
+
+        await aiosmtplib.send(
+            message,
+            hostname=smtp_host,
+            port=smtp_port,
+            username=username,
+            password=password,
+            start_tls=True,
+        )
         return True
     except Exception as e:
         logger.error(f"Failed to send email to {to}: {e}")

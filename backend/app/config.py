@@ -1,21 +1,22 @@
 from functools import lru_cache
 from typing import Optional
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Central configuration — all values sourced from environment variables."""
+    """Central configuration — all values sourced from a single .env file in the main folder."""
+
     model_config = SettingsConfigDict(
-        # Load .env and .env.local from parent dir (for when running from backend/)
-        # or current dir (fallback)
-        env_file=("../.env", "../.env.local", ".env", ".env.local"),
+        env_file=".env",          
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore"
+        extra="ignore",
     )
 
-    DATABASE_URL: str
+    # Database
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:Rahulv29@localhost:5432/careops_db"
+
+    # Auth
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -39,6 +40,9 @@ class Settings(BaseSettings):
     # Token lifetimes
     EMAIL_TOKEN_EXPIRE_HOURS: int = 24
     INVITATION_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Communication encryption
+    COMMUNICATION_ENCRYPTION_KEY: str
 
 
 @lru_cache

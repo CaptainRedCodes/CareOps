@@ -38,6 +38,15 @@ class Workspace(Base):
     staff_assignments = relationship(
         "StaffAssignment", back_populates="workspace", cascade="all, delete-orphan"
     )
+    service_types = relationship(
+        "ServiceType", back_populates="workspace", cascade="all, delete-orphan"
+    )
+    contacts = relationship(
+        "Contact", back_populates="workspace", cascade="all, delete-orphan"
+    )
+    contact_forms = relationship(
+        "ContactForm", back_populates="workspace", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Workspace {self.business_name}>"
