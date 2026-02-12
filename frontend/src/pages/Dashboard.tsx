@@ -13,6 +13,7 @@ import {
     UserPlus,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import InviteStaffModal from "./InviteStaff";
 import api from "@/api/client";
 
 interface Workspace {
@@ -27,6 +28,8 @@ export default function Dashboard() {
     const { user } = useAuth();
     const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
     const [loading, setLoading] = useState(true);
+    const [inviteModalOpen, setInviteModalOpen] = useState(false);
+    const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null);
 
     useEffect(() => {
         api.get("/workspaces")
@@ -41,6 +44,11 @@ export default function Dashboard() {
         if (hour < 12) return "Good morning";
         if (hour < 17) return "Good afternoon";
         return "Good evening";
+    };
+
+    const handleInviteStaff = (workspace: Workspace) => {
+        setSelectedWorkspace(workspace);
+        setInviteModalOpen(true);
     };
 
     return (
@@ -192,11 +200,22 @@ export default function Dashboard() {
                                                 <p>🕐 {ws.timezone}</p>
                                                 <p>✉️ {ws.contact_email}</p>
                                             </div>
-                                            <div className="mt-4 flex items-center justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                                            <div className="mt-4 flex items-center justify-between gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                                                {isAdmin && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleInviteStaff(ws)}
+                                                        className="h-8 gap-1 text-xs text-brand hover:text-brand-hover"
+                                                    >
+                                                        <UserPlus className="h-3 w-3" />
+                                                        Invite Staff
+                                                    </Button>
+                                                )}
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    className="h-8 gap-1 text-xs text-brand hover:text-brand-hover"
+                                                    className="ml-auto h-8 gap-1 text-xs text-brand hover:text-brand-hover"
                                                 >
                                                     View
                                                     <ArrowRight className="h-3 w-3" />
@@ -210,6 +229,23 @@ export default function Dashboard() {
                     )}
                 </motion.div>
             </main>
+
+            {/* Invite Staff Modal */}
+            {selectedWorkspace && (
+                <InviteStaffModal
+                    workspaceId={selectedWorkspace.id}
+                    workspaceName={selectedWorkspace.business_name}
+                    isOpen={inviteModalOpen}
+                    onClose={() => {
+                        setInviteModalOpen(false);
+                        setSelectedWorkspace(null);
+                    }}
+                    onSuccess={() => {
+                        // Optionally refresh workspaces or show a notification
+                        console.log("Staff invitation sent successfully");
+                    }}
+                />
+            )}
         </div>
     );
 }
