@@ -12,12 +12,14 @@ from app.database import Base
 
 class UserRole(str, enum.Enum):
     """Allowed user roles."""
+
     ADMIN = "admin"
     STAFF = "staff"
 
 
 class AuthProvider(str, enum.Enum):
     """How the user was authenticated."""
+
     LOCAL = "local"
     GOOGLE = "google"
 
@@ -34,7 +36,8 @@ class User(Base):
         String(255), unique=True, index=True, nullable=False
     )
     hashed_password: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True  # Nullable for OAuth-only users
+        String(255),
+        nullable=True,  # Nullable for OAuth-only users
     )
     full_name: Mapped[str] = mapped_column(String(150), nullable=False)
     role: Mapped[UserRole] = mapped_column(
@@ -98,6 +101,8 @@ class User(Base):
     staff_assignments = relationship(
         "StaffAssignment", back_populates="user", cascade="all, delete-orphan"
     )
+    assigned_leads = relationship("Lead", back_populates="assigned_to")
+    lead_activities = relationship("LeadActivity", back_populates="performed_by")
 
     def __repr__(self) -> str:
         return f"<User {self.email} role={self.role.value} provider={self.auth_provider.value}>"

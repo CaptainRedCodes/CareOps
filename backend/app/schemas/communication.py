@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 # ---------- Integration Schemas ----------
 
+
 class IntegrationBase(BaseModel):
     channel: str = Field(..., examples=["email", "sms"])
     provider: str = Field(..., examples=["gmail", "sendgrid", "twilio"])
@@ -27,6 +28,7 @@ class IntegrationResponse(IntegrationBase):
 
 # ---------- Communication Log Schemas ----------
 
+
 class CommunicationLogResponse(BaseModel):
     id: UUID
     workspace_id: UUID
@@ -39,6 +41,7 @@ class CommunicationLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 class IntegrationCreate(BaseModel):
     channel: str = Field(..., pattern="^(email|sms)$")
@@ -70,3 +73,17 @@ class CommunicationLogOut(BaseModel):
     subject: Optional[str]
     status: str
     error_message: Optional[str]
+
+
+class VerificationRequest(BaseModel):
+    channel: str = Field(..., pattern="^(email|sms)$")
+    test_recipient: str = Field(
+        ..., description="Email or phone number to send test message"
+    )
+
+
+class VerificationResponse(BaseModel):
+    success: bool
+    message: str
+    channel: str
+    error: Optional[str] = None

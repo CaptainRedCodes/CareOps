@@ -13,43 +13,38 @@ from app.services.communication_service import send_communication
 
 
 async def get_conversation(
-    db: AsyncSession,
-    conversation_id: UUID,
-    workspace_id: UUID
+    db: AsyncSession, conversation_id: UUID, workspace_id: UUID
 ) -> Conversation:
     """Get a conversation by ID"""
     result = await db.execute(
         select(Conversation).where(
             Conversation.id == conversation_id,
-            Conversation.workspace_id == workspace_id
+            Conversation.workspace_id == workspace_id,
         )
     )
     conversation = result.scalar_one_or_none()
-    
+
     if not conversation:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Conversation not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found"
         )
-    
+
     return conversation
 
 
 async def get_conversation_messages(
-    db: AsyncSession,
-    conversation_id: UUID,
-    workspace_id: UUID
+    db: AsyncSession, conversation_id: UUID, workspace_id: UUID
 ) -> list[Message]:
     """Get all messages in a conversation"""
     # First verify conversation exists and belongs to workspace
     await get_conversation(db, conversation_id, workspace_id)
-    
+
     result = await db.execute(
         select(Message)
         .where(Message.conversation_id == conversation_id)
         .order_by(Message.created_at.asc())
     )
-    
+
     return result.scalars().all()
 
 
@@ -58,61 +53,56 @@ async def send_staff_reply(
     conversation_id: UUID,
     workspace_id: UUID,
     data: MessageCreate,
-    user_id: UUID = None
+    user_id: UUID = None,
 ) -> Message:
     """
     Send a staff reply to a contact
-    
+
     Flow:
     1. Get conversation and contact
-    2. Pause automation for this conversation
-    3. Send message via communication service
-    4. Create message record
-    5. Update conversation metadata
+    2. Send message via communication service
+    3. Create message record
+    4. EMIT staff.replied EVENT (automation handler will pause)
     """
-    
+
     # Get conversation with contact
     result = await db.execute(
-        select(Conversation)
-        .where(
+        select(Conversation).where(
             Conversation.id == conversation_id,
-            Conversation.workspace_id == workspace_id
+            Conversation.workspace_id == workspace_id,
         )
     )
     conversation = result.scalar_one_or_none()
-    
+
     if not conversation:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Conversation not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found"
         )
-    
+
     # Get contact
     result = await db.execute(
         select(Contact).where(Contact.id == conversation.contact_id)
     )
     contact = result.scalar_one_or_none()
-    
+
     if not contact:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Contact not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found"
         )
-    
+
     # Determine recipient
     recipient = contact.email if data.channel == "email" else contact.phone
-    
+
     if not recipient:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Contact does not have {data.channel} information"
+            detail=f"Contact does not have {data.channel} information",
         )
-    
-    # Pause automation when staff replies
-    conversation.automation_paused = True
+
+    # Update conversation metadata (before sending)
     conversation.last_message_at = datetime.now()
     conversation.last_message_from = "staff"
-    
+
     # Send via communication service
     try:
         await send_communication(
@@ -123,14 +113,14 @@ async def send_staff_reply(
             subject=data.subject,
             message=data.body,
             sent_by_staff=True,
-            automated=False
+            automated=False,
         )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send message: {str(e)}"
+            detail=f"Failed to send message: {str(e)}",
         )
-    
+
     # Create message record
     message = Message(
         conversation_id=conversation_id,
@@ -142,40 +132,56 @@ async def send_staff_reply(
         body=data.body,
         sent_by_staff=True,
         automated=False,
-        status="sent"
+        status="sent",
     )
-    
+
     db.add(message)
+
+    # =======================================================================
+    # EVENT-DRIVEN: Emit staff.replied event
+    # Automation handler will pause automation for this conversation
+    # =======================================================================
+    from app.services.event_service import emit_staff_replied
+
+    await emit_staff_replied(
+        db=db,
+        workspace_id=workspace_id,
+        conversation_id=conversation.id,
+        reply_data={
+            "message_id": str(message.id),
+            "channel": data.channel,
+            "sent_by_staff": True,
+        },
+    )
+
     await db.commit()
     await db.refresh(message)
-    
+
     return message
 
 
 async def list_conversations(
-    db: AsyncSession,
-    workspace_id: UUID,
-    status: str = None
+    db: AsyncSession, workspace_id: UUID, status: str = None
 ) -> list[dict]:
     """
     List all conversations for workspace inbox
-    
+
     Returns conversations with contact info and last message preview
     """
-    query = select(Conversation, Contact).join(
-        Contact, Conversation.contact_id == Contact.id
-    ).where(
-        Conversation.workspace_id == workspace_id
+    query = (
+        select(Conversation, Contact)
+        .join(Contact, Conversation.contact_id == Contact.id)
+        .where(Conversation.workspace_id == workspace_id)
     )
-    
+
     if status:
         query = query.where(Conversation.status == status)
-    
+
     query = query.order_by(Conversation.last_message_at.desc())
-    
+
     result = await db.execute(query)
     rows = result.all()
-    
+
     conversations_data = []
     for conversation, contact in rows:
         # Get last message
@@ -186,51 +192,51 @@ async def list_conversations(
             .limit(1)
         )
         last_message = last_msg_result.scalar_one_or_none()
-        
-        conversations_data.append({
-            "conversation_id": conversation.id,
-            "contact_id": contact.id,
-            "contact_name": contact.name,
-            "contact_email": contact.email,
-            "contact_phone": contact.phone,
-            "status": conversation.status,
-            "last_message_at": conversation.last_message_at,
-            "last_message_from": conversation.last_message_from,
-            "automation_paused": conversation.automation_paused,
-            "last_message_preview": last_message.body[:100] if last_message else None,
-            "unread_count": 0  # TODO: Implement read tracking
-        })
-    
+
+        conversations_data.append(
+            {
+                "conversation_id": conversation.id,
+                "contact_id": contact.id,
+                "contact_name": contact.name,
+                "contact_email": contact.email,
+                "contact_phone": contact.phone,
+                "status": conversation.status,
+                "last_message_at": conversation.last_message_at,
+                "last_message_from": conversation.last_message_from,
+                "automation_paused": conversation.automation_paused,
+                "last_message_preview": last_message.body[:100]
+                if last_message
+                else None,
+                "unread_count": 0,  # TODO: Implement read tracking
+            }
+        )
+
     return conversations_data
 
 
 async def close_conversation(
-    db: AsyncSession,
-    conversation_id: UUID,
-    workspace_id: UUID
+    db: AsyncSession, conversation_id: UUID, workspace_id: UUID
 ) -> Conversation:
     """Close a conversation"""
     conversation = await get_conversation(db, conversation_id, workspace_id)
-    
+
     conversation.status = "closed"
-    
+
     await db.commit()
     await db.refresh(conversation)
-    
+
     return conversation
 
 
 async def reopen_conversation(
-    db: AsyncSession,
-    conversation_id: UUID,
-    workspace_id: UUID
+    db: AsyncSession, conversation_id: UUID, workspace_id: UUID
 ) -> Conversation:
     """Reopen a closed conversation"""
     conversation = await get_conversation(db, conversation_id, workspace_id)
-    
+
     conversation.status = "active"
-    
+
     await db.commit()
     await db.refresh(conversation)
-    
+
     return conversation

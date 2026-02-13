@@ -1,4 +1,10 @@
 # app/services/workspace_form_service.py
+"""
+Workspace Form Service - Domain Logic
+
+Handles workspace form (intake, agreement, document) CRUD.
+"""
+
 from uuid import UUID
 from datetime import datetime, UTC
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,23 +13,19 @@ from fastapi import HTTPException, status
 
 from app.models.workspace_form import WorkspaceForm, FormSubmission
 from app.models.booking import Booking
-from app.models.automation import AutomationEvent
 from app.schemas.workspace_form import (
-    WorkspaceFormCreate, WorkspaceFormUpdate,
-    FormSubmissionCreate, FormSubmissionUpdate
+    WorkspaceFormCreate,
+    WorkspaceFormUpdate,
+    FormSubmissionCreate,
+    FormSubmissionUpdate,
 )
 
 
 async def create_workspace_form(
-    db: AsyncSession,
-    workspace_id: UUID,
-    data: WorkspaceFormCreate
+    db: AsyncSession, workspace_id: UUID, data: WorkspaceFormCreate
 ) -> WorkspaceForm:
     """Create a new workspace form"""
-    form = WorkspaceForm(
-        workspace_id=workspace_id,
-        **data.model_dump()
-    )
+    form = WorkspaceForm(workspace_id=workspace_id, **data.model_dump())
     db.add(form)
     await db.commit()
     await db.refresh(form)
@@ -31,9 +33,7 @@ async def create_workspace_form(
 
 
 async def list_workspace_forms(
-    db: AsyncSession,
-    workspace_id: UUID,
-    active_only: bool = True
+    db: AsyncSession, workspace_id: UUID, active_only: bool = True
 ) -> list[WorkspaceForm]:
     """List all workspace forms"""
     query = select(WorkspaceForm).where(WorkspaceForm.workspace_id == workspace_id)
@@ -46,32 +46,25 @@ async def list_workspace_forms(
 
 
 async def get_workspace_form(
-    db: AsyncSession,
-    form_id: UUID,
-    workspace_id: UUID
+    db: AsyncSession, form_id: UUID, workspace_id: UUID
 ) -> WorkspaceForm:
     """Get a specific workspace form"""
     result = await db.execute(
         select(WorkspaceForm).where(
-            WorkspaceForm.id == form_id,
-            WorkspaceForm.workspace_id == workspace_id
+            WorkspaceForm.id == form_id, WorkspaceForm.workspace_id == workspace_id
         )
     )
     form = result.scalar_one_or_none()
 
     if not form:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Form not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
         )
     return form
 
 
 async def update_workspace_form(
-    db: AsyncSession,
-    form_id: UUID,
-    workspace_id: UUID,
-    data: WorkspaceFormUpdate
+    db: AsyncSession, form_id: UUID, workspace_id: UUID, data: WorkspaceFormUpdate
 ) -> WorkspaceForm:
     """Update a workspace form"""
     form = await get_workspace_form(db, form_id, workspace_id)
@@ -84,11 +77,7 @@ async def update_workspace_form(
     return form
 
 
-async def delete_workspace_form(
-    db: AsyncSession,
-    form_id: UUID,
-    workspace_id: UUID
-):
+async def delete_workspace_form(db: AsyncSession, form_id: UUID, workspace_id: UUID):
     """Delete a workspace form"""
     form = await get_workspace_form(db, form_id, workspace_id)
     await db.delete(form)
@@ -100,7 +89,7 @@ async def send_forms_for_booking(
     workspace_id: UUID,
     booking_id: UUID,
     contact_id: UUID,
-    form_ids: list[str]
+    form_ids: list[str],
 ):
     """Create form submissions for a booking (called when booking is created)"""
     for form_id_str in form_ids:
@@ -113,23 +102,10 @@ async def send_forms_for_booking(
                 form_id=form.id,
                 booking_id=booking_id,
                 contact_id=contact_id,
-                status="pending"
+                status="pending",
             )
             db.add(submission)
 
-            # Log automation event
-            event = AutomationEvent(
-                workspace_id=workspace_id,
-                event_type="form_sent",
-                trigger="booking_created",
-                description=f"Form '{form.name}' sent for booking",
-                metadata_json={
-                    "form_id": str(form.id),
-                    "booking_id": str(booking_id),
-                    "contact_id": str(contact_id)
-                }
-            )
-            db.add(event)
         except (ValueError, Exception) as e:
             print(f"Failed to send form {form_id_str}: {e}")
             continue
@@ -138,9 +114,7 @@ async def send_forms_for_booking(
 
 
 async def list_submissions_for_booking(
-    db: AsyncSession,
-    booking_id: UUID,
-    workspace_id: UUID
+    db: AsyncSession, booking_id: UUID, workspace_id: UUID
 ) -> list[FormSubmission]:
     """List all form submissions for a booking"""
     result = await db.execute(
@@ -148,7 +122,7 @@ async def list_submissions_for_booking(
         .join(WorkspaceForm)
         .where(
             FormSubmission.booking_id == booking_id,
-            WorkspaceForm.workspace_id == workspace_id
+            WorkspaceForm.workspace_id == workspace_id,
         )
         .order_by(FormSubmission.created_at)
     )
@@ -159,7 +133,7 @@ async def update_submission(
     db: AsyncSession,
     submission_id: UUID,
     workspace_id: UUID,
-    data: FormSubmissionUpdate
+    data: FormSubmissionUpdate,
 ) -> FormSubmission:
     """Update a form submission (mark as completed, etc.)"""
     result = await db.execute(
@@ -167,15 +141,14 @@ async def update_submission(
         .join(WorkspaceForm)
         .where(
             FormSubmission.id == submission_id,
-            WorkspaceForm.workspace_id == workspace_id
+            WorkspaceForm.workspace_id == workspace_id,
         )
     )
     submission = result.scalar_one_or_none()
 
     if not submission:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Form submission not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Form submission not found"
         )
 
     for field, value in data.model_dump(exclude_unset=True).items():
@@ -183,6 +156,23 @@ async def update_submission(
 
     if data.status == "completed" and not submission.submitted_at:
         submission.submitted_at = datetime.now(UTC)
+
+    await db.flush()
+
+    # =======================================================================
+    # EVENT-DRIVEN: Emit form.completed event
+    # Handler will check if all forms are done and update booking readiness
+    # =======================================================================
+    if data.status == "completed":
+        from app.services.event_service import emit_form_completed
+
+        await emit_form_completed(
+            db=db,
+            workspace_id=workspace_id,
+            form_id=submission.form_id,
+            booking_id=submission.booking_id,
+            form_data={"submission_id": str(submission_id)},
+        )
 
     await db.commit()
     await db.refresh(submission)

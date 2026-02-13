@@ -5,12 +5,10 @@ from uuid import UUID
 from typing import List
 
 from app.database import get_db
-from app.dependencies import get_current_user, require_admin
+from app.dependencies import require_workspace_member, require_admin
 from app.models.user import User
 from app.schemas.staff import StaffOut, StaffPermissionsUpdate
-from app.services.staff_service import (
-    list_staff, update_staff_permissions, remove_staff
-)
+from app.services.staff_service import list_staff, update_staff_permissions, remove_staff
 
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/staff", tags=["Staff"])
@@ -20,9 +18,9 @@ router = APIRouter(prefix="/workspaces/{workspace_id}/staff", tags=["Staff"])
 async def get_staff(
     workspace_id: UUID,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: User = Depends(require_workspace_member),
 ):
-    """List all staff members with permissions"""
+    """List all staff members with permissions (requires workspace membership)"""
     return await list_staff(db, workspace_id)
 
 
@@ -32,7 +30,7 @@ async def update_permissions(
     staff_id: UUID,
     data: StaffPermissionsUpdate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin)
+    admin: User = Depends(require_admin),
 ):
     """Update staff permissions (admin only)"""
     assignment = await update_staff_permissions(db, staff_id, workspace_id, data)
@@ -46,7 +44,7 @@ async def delete_staff(
     workspace_id: UUID,
     staff_id: UUID,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin)
+    admin: User = Depends(require_admin),
 ):
     """Remove a staff member from workspace (admin only)"""
     await remove_staff(db, staff_id, workspace_id)

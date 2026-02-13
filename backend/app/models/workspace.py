@@ -1,4 +1,3 @@
-
 import uuid
 from datetime import UTC, datetime
 
@@ -39,8 +38,8 @@ class Workspace(Base):
     staff_assignments = relationship(
         "StaffAssignment", back_populates="workspace", cascade="all, delete-orphan"
     )
-    service_types = relationship(
-        "ServiceType", back_populates="workspace", cascade="all, delete-orphan"
+    booking_types = relationship(
+        "BookingType", back_populates="workspace", cascade="all, delete-orphan"
     )
     contacts = relationship(
         "Contact", back_populates="workspace", cascade="all, delete-orphan"
@@ -53,6 +52,30 @@ class Workspace(Base):
     )
     workspace_forms = relationship(
         "WorkspaceForm", back_populates="workspace", cascade="all, delete-orphan"
+    )
+    calendar_integration = relationship(
+        "CalendarIntegration",
+        back_populates="workspace",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    calendar_events = relationship(
+        "CalendarEvent", back_populates="workspace", cascade="all, delete-orphan"
+    )
+    leads = relationship(
+        "Lead", back_populates="workspace", cascade="all, delete-orphan"
+    )
+    lead_activities = relationship(
+        "LeadActivity", back_populates="workspace", cascade="all, delete-orphan"
+    )
+    gmail_integration = relationship(
+        "GmailIntegration",
+        back_populates="workspace",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    email_messages = relationship(
+        "EmailMessage", back_populates="workspace", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

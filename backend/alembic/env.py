@@ -14,7 +14,17 @@ from app.config import get_settings
 from app.database import Base
 
 # Import all models so Base.metadata is populated
-from app.models import User, Workspace, StaffAssignment  # noqa: F401
+from app.models import (
+    User,
+    Workspace,
+    StaffAssignment,
+    CalendarIntegration,
+    CalendarEvent,
+    Lead,
+    LeadActivity,
+    GmailIntegration,
+    EmailMessage,
+)  # noqa: F401
 
 config = context.config
 

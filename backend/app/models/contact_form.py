@@ -27,16 +27,12 @@ class ContactForm(Base):
     
     # Settings
     is_active = Column(Boolean, default=True)
-    status = Column(String(50), default="draft")  # draft, active, archived
+    status = Column(String(50), default="draft", nullable=False)
     submit_button_text = Column(String(100), default="Submit")
     success_message = Column(Text, default="Thank you! We'll be in touch soon.")
     
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
-    status = Column(
-        String(50),
-        default="draft",
-        nullable=False
-    ) 
+
     # Relationships
     workspace = relationship("Workspace", back_populates="contact_forms")

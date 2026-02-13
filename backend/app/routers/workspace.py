@@ -1,7 +1,15 @@
 from typing import List
 from uuid import UUID
 
-from app.schemas.communication import CommunicationLogOut, IntegrationCreate, IntegrationOut, IntegrationResponse, SendMessageIn
+from app.schemas.communication import (
+    CommunicationLogOut,
+    IntegrationCreate,
+    IntegrationOut,
+    IntegrationResponse,
+    SendMessageIn,
+    VerificationRequest,
+    VerificationResponse,
+)
 from app.models.communication import CommunicationIntegration, CommunicationLog
 from app.services.communication_service import send_communication
 from app.schemas.conversation import MessageCreate, MessageOut
@@ -13,7 +21,11 @@ from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.models.user import User
 from app.schemas.invitation import InvitationResponse, InviteStaffRequest
-from app.schemas.workspace import WorkspaceCreate, WorkspaceResponse, ActivationStatusResponse
+from app.schemas.workspace import (
+    WorkspaceCreate,
+    WorkspaceResponse,
+    ActivationStatusResponse,
+)
 from app.services.invitation_service import invite_staff, list_invitations
 from app.services.workspace_service import (
     check_activation_readiness,
@@ -23,6 +35,10 @@ from app.services.workspace_service import (
     get_workspace as svc_get_workspace,
     list_workspaces as svc_list_workspaces,
     remove_integration,
+)
+from app.services.verification_service import (
+    verify_email_integration,
+    verify_sms_integration,
 )
 
 router = APIRouter(prefix="/workspaces", tags=["Workspaces"])
@@ -91,9 +107,9 @@ async def get_logs(
 ):
     """Get communication logs for a workspace."""
     result = await db.execute(
-        select(CommunicationLog).where(
-            CommunicationLog.workspace_id == workspace_id
-        ).order_by(CommunicationLog.sent_at.desc())
+        select(CommunicationLog)
+        .where(CommunicationLog.workspace_id == workspace_id)
+        .order_by(CommunicationLog.sent_at.desc())
     )
     return result.scalars().all()
 
@@ -143,11 +159,11 @@ async def reply_to_conversation(
     conversation_id: UUID,
     data: MessageCreate,  # Should include: channel, content
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
 ):
     """
     Send staff reply via email OR SMS
-    
+
     The service layer:
     1. Validates contact has this channel
     2. Calls appropriate integration (email/SMS)
@@ -157,7 +173,9 @@ async def reply_to_conversation(
     return await send_staff_reply(db, conversation_id, workspace_id, data, user.id)
 
 
-@router.get("/{workspace_id}/activation-status", response_model=ActivationStatusResponse)
+@router.get(
+    "/{workspace_id}/activation-status", response_model=ActivationStatusResponse
+)
 async def get_activation_status(
     workspace_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -175,3 +193,26 @@ async def activate(
 ):
     """Activate workspace (admin only). Checks readiness first."""
     return await svc_activate_workspace(db, workspace_id, admin)
+
+
+@router.post("/{workspace_id}/verify-integration", response_model=VerificationResponse)
+async def verify_integration(
+    workspace_id: UUID,
+    data: VerificationRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """
+    Verify a communication integration by sending a test message.
+    Returns success status and any error message.
+    """
+    if data.channel == "email":
+        return await verify_email_integration(db, workspace_id, data.test_recipient)
+    elif data.channel == "sms":
+        return await verify_sms_integration(db, workspace_id, data.test_recipient)
+    else:
+        return VerificationResponse(
+            success=False,
+            message="Invalid channel. Use 'email' or 'sms'.",
+            channel=data.channel,
+        )

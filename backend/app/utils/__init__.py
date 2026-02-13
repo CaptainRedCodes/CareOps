@@ -7,8 +7,6 @@ import bcrypt
 
 def hash_password(plain: str) -> str:
     """Return a bcrypt hash of *plain*. Truncates to 72 bytes (bcrypt limit)."""
-    # bcrypt has a 72-byte limit on the input password length.
-    # Truncate to 72 bytes before hashing.
     password_bytes = plain.encode("utf-8")
     truncated_bytes = password_bytes[:72]
     

@@ -1,5 +1,15 @@
 # app/models/inventory.py
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Boolean, Integer, Float
+from sqlalchemy import (
+    Column,
+    String,
+    DateTime,
+    ForeignKey,
+    Text,
+    Boolean,
+    Integer,
+    Float,
+    Index,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -9,10 +19,18 @@ from app.database import Base
 
 class InventoryItem(Base):
     """Resource or item used per booking"""
+
     __tablename__ = "inventory_items"
+    __table_args__ = (
+        Index("ix_inventory_items_workspace_quantity", "workspace_id", "quantity"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    workspace_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
 
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
@@ -24,11 +42,17 @@ class InventoryItem(Base):
     is_active = Column(Boolean, default=True)
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
 
     # Relationships
     workspace = relationship("Workspace", back_populates="inventory_items")
-    usage_records = relationship("InventoryUsage", back_populates="item", cascade="all, delete-orphan")
+    usage_records = relationship(
+        "InventoryUsage", back_populates="item", cascade="all, delete-orphan"
+    )
 
     @property
     def is_low_stock(self) -> bool:
@@ -37,12 +61,29 @@ class InventoryItem(Base):
 
 class InventoryUsage(Base):
     """Tracks inventory usage per booking"""
+
     __tablename__ = "inventory_usage"
+    __table_args__ = (
+        Index("ix_inventory_usage_workspace_created", "workspace_id", "created_at"),
+        Index("ix_inventory_usage_booking_id", "booking_id"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    item_id = Column(UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False)
-    booking_id = Column(UUID(as_uuid=True), ForeignKey("bookings.id", ondelete="SET NULL"), nullable=True)
-    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    item_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    booking_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("bookings.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    workspace_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+    )
 
     quantity_used = Column(Float, nullable=False)
     notes = Column(Text, nullable=True)

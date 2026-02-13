@@ -5,22 +5,19 @@ from sqlalchemy import select
 from fastapi import HTTPException, status
 
 from app.models.inventory import InventoryItem, InventoryUsage
-from app.models.automation import AutomationEvent
 from app.schemas.inventory import (
-    InventoryItemCreate, InventoryItemUpdate, InventoryUsageCreate, LowStockAlert
+    InventoryItemCreate,
+    InventoryItemUpdate,
+    InventoryUsageCreate,
+    LowStockAlert,
 )
 
 
 async def create_inventory_item(
-    db: AsyncSession,
-    workspace_id: UUID,
-    data: InventoryItemCreate
+    db: AsyncSession, workspace_id: UUID, data: InventoryItemCreate
 ) -> InventoryItem:
     """Create a new inventory item"""
-    item = InventoryItem(
-        workspace_id=workspace_id,
-        **data.model_dump()
-    )
+    item = InventoryItem(workspace_id=workspace_id, **data.model_dump())
     db.add(item)
     await db.commit()
     await db.refresh(item)
@@ -28,9 +25,7 @@ async def create_inventory_item(
 
 
 async def list_inventory_items(
-    db: AsyncSession,
-    workspace_id: UUID,
-    active_only: bool = True
+    db: AsyncSession, workspace_id: UUID, active_only: bool = True
 ) -> list[InventoryItem]:
     """List all inventory items for a workspace"""
     query = select(InventoryItem).where(InventoryItem.workspace_id == workspace_id)
@@ -43,33 +38,26 @@ async def list_inventory_items(
 
 
 async def get_inventory_item(
-    db: AsyncSession,
-    item_id: UUID,
-    workspace_id: UUID
+    db: AsyncSession, item_id: UUID, workspace_id: UUID
 ) -> InventoryItem:
     """Get a specific inventory item"""
     result = await db.execute(
         select(InventoryItem).where(
-            InventoryItem.id == item_id,
-            InventoryItem.workspace_id == workspace_id
+            InventoryItem.id == item_id, InventoryItem.workspace_id == workspace_id
         )
     )
     item = result.scalar_one_or_none()
 
     if not item:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Inventory item not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Inventory item not found"
         )
 
     return item
 
 
 async def update_inventory_item(
-    db: AsyncSession,
-    item_id: UUID,
-    workspace_id: UUID,
-    data: InventoryItemUpdate
+    db: AsyncSession, item_id: UUID, workspace_id: UUID, data: InventoryItemUpdate
 ) -> InventoryItem:
     """Update an inventory item"""
     item = await get_inventory_item(db, item_id, workspace_id)
@@ -82,11 +70,7 @@ async def update_inventory_item(
     return item
 
 
-async def delete_inventory_item(
-    db: AsyncSession,
-    item_id: UUID,
-    workspace_id: UUID
-):
+async def delete_inventory_item(db: AsyncSession, item_id: UUID, workspace_id: UUID):
     """Delete an inventory item"""
     item = await get_inventory_item(db, item_id, workspace_id)
     await db.delete(item)
@@ -94,17 +78,20 @@ async def delete_inventory_item(
 
 
 async def record_usage(
-    db: AsyncSession,
-    workspace_id: UUID,
-    data: InventoryUsageCreate
+    db: AsyncSession, workspace_id: UUID, data: InventoryUsageCreate
 ) -> InventoryUsage:
-    """Record inventory usage and deduct from stock"""
+    """
+    Record inventory usage and deduct from stock.
+    Emits inventory.updated event for automation handlers.
+    """
     item = await get_inventory_item(db, data.item_id, workspace_id)
+
+    previous_quantity = item.quantity
 
     if item.quantity < data.quantity_used:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Insufficient stock. Available: {item.quantity} {item.unit}"
+            detail=f"Insufficient stock. Available: {item.quantity} {item.unit}",
         )
 
     # Deduct stock
@@ -116,25 +103,30 @@ async def record_usage(
         booking_id=data.booking_id,
         workspace_id=workspace_id,
         quantity_used=data.quantity_used,
-        notes=data.notes
+        notes=data.notes,
     )
     db.add(usage)
 
-    # Check for low stock alert
-    if item.quantity <= item.low_stock_threshold:
-        event = AutomationEvent(
-            workspace_id=workspace_id,
-            event_type="inventory_alert",
-            trigger="usage_recorded",
-            description=f"Low stock alert: {item.name} is at {item.quantity} {item.unit} (threshold: {item.low_stock_threshold})",
-            metadata_json={
-                "item_id": str(item.id),
-                "item_name": item.name,
-                "current_quantity": item.quantity,
-                "threshold": item.low_stock_threshold
-            }
-        )
-        db.add(event)
+    # =======================================================================
+    # EVENT-DRIVEN: Emit inventory.updated event
+    # Automation handlers will check thresholds and send alerts
+    # =======================================================================
+    from app.services.event_service import emit_inventory_updated
+
+    await emit_inventory_updated(
+        db=db,
+        workspace_id=workspace_id,
+        item_id=item.id,
+        inventory_data={
+            "item_name": item.name,
+            "quantity_before": previous_quantity,
+            "quantity_after": item.quantity,
+            "quantity_used": data.quantity_used,
+            "unit": item.unit,
+            "low_stock_threshold": item.low_stock_threshold,
+            "booking_id": str(data.booking_id) if data.booking_id else None,
+        },
+    )
 
     await db.commit()
     await db.refresh(usage)
@@ -142,15 +134,14 @@ async def record_usage(
 
 
 async def get_low_stock_alerts(
-    db: AsyncSession,
-    workspace_id: UUID
+    db: AsyncSession, workspace_id: UUID
 ) -> list[LowStockAlert]:
     """Get all items below their low stock threshold"""
     result = await db.execute(
         select(InventoryItem).where(
             InventoryItem.workspace_id == workspace_id,
             InventoryItem.is_active == True,
-            InventoryItem.quantity <= InventoryItem.low_stock_threshold
+            InventoryItem.quantity <= InventoryItem.low_stock_threshold,
         )
     )
     items = result.scalars().all()
@@ -161,16 +152,14 @@ async def get_low_stock_alerts(
             item_name=item.name,
             current_quantity=item.quantity,
             threshold=item.low_stock_threshold,
-            unit=item.unit
+            unit=item.unit,
         )
         for item in items
     ]
 
 
 async def get_usage_history(
-    db: AsyncSession,
-    workspace_id: UUID,
-    item_id: UUID = None
+    db: AsyncSession, workspace_id: UUID, item_id: UUID = None
 ) -> list[InventoryUsage]:
     """Get usage history, optionally filtered by item"""
     query = select(InventoryUsage).where(InventoryUsage.workspace_id == workspace_id)

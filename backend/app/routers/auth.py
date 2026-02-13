@@ -84,12 +84,22 @@ async def me(current_user: User = Depends(get_current_user)):
 # ── Email Verification ──────────────────────────────────────────────────────
 
 
+@router.get("/verify-email", response_model=MessageResponse)
+async def verify_email_get(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Verify user's email using token from email (GET method)."""
+    await verify_email(db, token)
+    return {"message": "Email verified successfully. You can now sign in."}
+
+
 @router.post("/verify-email", response_model=MessageResponse)
-async def verify_email_endpoint(
+async def verify_email_post(
     payload: VerifyEmailRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Verify user's email using the token from the verification email."""
+    """Verify user's email using token from email (POST method)."""
     await verify_email(db, payload.token)
     return {"message": "Email verified successfully. You can now sign in."}
 
@@ -103,7 +113,9 @@ async def resend_verification_endpoint(
 ):
     """Resend verification email. Rate limited: 2 req/min."""
     await resend_verification(db, payload.email)
-    return {"message": "If an unverified account exists, a new verification email has been sent."}
+    return {
+        "message": "If an unverified account exists, a new verification email has been sent."
+    }
 
 
 # ── Password Reset ──────────────────────────────────────────────────────────
@@ -118,7 +130,9 @@ async def forgot_password(
 ):
     """Send password reset email. Always returns success to prevent email enumeration."""
     await request_password_reset(db, payload.email)
-    return {"message": "If an account with that email exists, a password reset link has been sent."}
+    return {
+        "message": "If an account with that email exists, a password reset link has been sent."
+    }
 
 
 @router.post("/reset-password", response_model=MessageResponse)
@@ -159,7 +173,9 @@ async def change_password_endpoint(
     db: AsyncSession = Depends(get_db),
 ):
     """Change password for an authenticated user."""
-    await change_password(db, current_user, payload.current_password, payload.new_password)
+    await change_password(
+        db, current_user, payload.current_password, payload.new_password
+    )
     return {"message": "Password changed successfully."}
 
 
