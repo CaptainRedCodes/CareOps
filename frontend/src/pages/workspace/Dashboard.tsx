@@ -8,15 +8,11 @@ import {
   Plus,
   Building2,
   Users,
-  Clock,
+  Calendar,
+  FileText,
   ArrowRight,
-  UserPlus,
-  Settings,
-  Boxes,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
-import InviteStaffModal from "./InviteStaff";
-import IntegrationsModal from "@/components/Integration";
+import Navbar from "@/components/layout/Navbar";
 import api from "@/api/client";
 
 interface Workspace {
@@ -26,18 +22,15 @@ interface Workspace {
   timezone: string;
   contact_email: string;
   staff_count?: number;
-  inventory_count?: number;
-  last_active_at?: string;
+  total_bookings?: number;
+  pending_forms?: number;
+  is_active?: boolean;
 }
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
-  const [inviteModalOpen, setInviteModalOpen] = useState(false);
-  const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null);
-  const [integrationsOpen, setIntegrationsOpen] = useState(false);
-  const [integrationWorkspace, setIntegrationWorkspace] = useState<Workspace | null>(null);
 
   useEffect(() => {
     const fetchWorkspaces = async () => {
@@ -59,13 +52,8 @@ export default function Dashboard() {
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Good morning" :
-    hour < 17 ? "Good afternoon" :
-    "Good evening";
-
-  const handleInviteStaff = (workspace: Workspace) => {
-    setSelectedWorkspace(workspace);
-    setInviteModalOpen(true);
-  };
+      hour < 17 ? "Good afternoon" :
+        "Good evening";
 
   return (
     <div className="min-h-screen bg-background">
@@ -122,16 +110,18 @@ export default function Dashboard() {
                 : workspaces.reduce((sum, w) => sum + (w.staff_count || 0), 0),
             },
             {
-              icon: Boxes,
-              label: "Inventory Items",
+              icon: Calendar,
+              label: "Total Bookings",
               value: loading
                 ? "—"
-                : workspaces.reduce((sum, w) => sum + (w.inventory_count || 0), 0),
+                : workspaces.reduce((sum, w) => sum + (w.total_bookings || 0), 0),
             },
             {
-              icon: Clock,
-              label: "Last Active",
-              value: "Just now",
+              icon: FileText,
+              label: "Pending Forms",
+              value: loading
+                ? "—"
+                : workspaces.reduce((sum, w) => sum + (w.pending_forms || 0), 0),
             },
           ].map((stat) => (
             <div
@@ -214,59 +204,43 @@ export default function Dashboard() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="space-y-1.5 text-xs text-muted-foreground">
-                        <p>📍 {ws.address}</p>
-                        <p>🕐 {ws.timezone}</p>
-                        <p>✉️ {ws.contact_email}</p>
+                      <div className="space-y-2 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground/70">📍</span>
+                          <span className="truncate">{ws.address}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground/70">🕐</span>
+                          <span>{ws.timezone}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground/70">✉️</span>
+                          <span className="truncate">{ws.contact_email}</span>
+                        </div>
                       </div>
 
                       {/* ── Quick Stats Row ───────────────────── */}
                       <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <span className="rounded-full bg-muted/50 px-2 py-0.5">
-                          👥 {ws.staff_count ?? 0} staff
+                        <span className="inline-flex items-center gap-1 rounded-full bg-brand/5 px-2.5 py-1 text-brand font-medium">
+                          <Users className="h-3 w-3" />
+                          {ws.staff_count ?? 0} staff
                         </span>
-                        <span className="rounded-full bg-muted/50 px-2 py-0.5">
-                          📦 {ws.inventory_count ?? 0} items
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-medium ${ws.is_active ? 'bg-green-500/10 text-green-600' : 'bg-yellow-500/10 text-yellow-600'}`}>
+                          <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                          {ws.is_active ? 'Active' : 'Setup'}
                         </span>
                       </div>
 
                       {/* ── Actions ─────────────────────────── */}
-                      <div className="mt-5 flex flex-wrap items-center gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                        {isAdmin && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleInviteStaff(ws)}
-                              className="h-8 gap-1 text-xs text-brand hover:text-brand-hover"
-                            >
-                              <UserPlus className="h-3 w-3" />
-                              Invite Staff
-                            </Button>
-
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setIntegrationWorkspace(ws);
-                                setIntegrationsOpen(true);
-                              }}
-                              className="h-8 gap-1 text-xs text-brand hover:text-brand-hover"
-                            >
-                              <Settings className="h-3 w-3" />
-                              Integrations
-                            </Button>
-                          </>
-                        )}
-
-                        <Link to={`/workspace/${ws.id}`}>
+                      <div className="mt-5 flex items-center justify-end">
+                        <Link to={`/workspace/${ws.id}`} className="w-full sm:w-auto">
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="ml-auto h-8 gap-1 text-xs text-brand hover:text-brand-hover"
+                            className="w-full sm:w-auto h-9 gap-2 text-sm font-medium text-brand hover:text-brand-hover hover:bg-brand/5"
                           >
-                            View
-                            <ArrowRight className="h-3 w-3" />
+                            View Workspace
+                            <ArrowRight className="h-4 w-4" />
                           </Button>
                         </Link>
                       </div>
@@ -279,33 +253,6 @@ export default function Dashboard() {
         </motion.div>
       </main>
 
-      {/* Invite Staff Modal */}
-      {selectedWorkspace && (
-        <InviteStaffModal
-          workspaceId={selectedWorkspace.id}
-          workspaceName={selectedWorkspace.business_name}
-          isOpen={inviteModalOpen}
-          onClose={() => {
-            setInviteModalOpen(false);
-            setSelectedWorkspace(null);
-          }}
-          onSuccess={() => {
-            console.log("Staff invitation sent successfully");
-          }}
-        />
-      )}
-
-      {/* Integrations Modal */}
-      {integrationWorkspace && (
-        <IntegrationsModal
-          workspaceId={integrationWorkspace.id}
-          isOpen={integrationsOpen}
-          onClose={() => {
-            setIntegrationsOpen(false);
-            setIntegrationWorkspace(null);
-          }}
-        />
-      )}
     </div>
   );
 }

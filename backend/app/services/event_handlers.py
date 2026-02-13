@@ -25,7 +25,6 @@ from app.models.inventory import InventoryItem, InventoryUsage
 logger = logging.getLogger(__name__)
 
 
-
 async def handle_contact_created(db: AsyncSession, event: EventLog):
     """
     When contact is created:
@@ -92,7 +91,6 @@ async def handle_contact_created(db: AsyncSession, event: EventLog):
 
     except Exception as e:
         logger.error(f"Failed to send welcome message: {e}")
-
 
 
 async def handle_booking_created(db: AsyncSession, event: EventLog):
@@ -352,6 +350,7 @@ async def _reserve_inventory(
                     "quantity_used": quantity_needed,
                     "unit": item.unit,
                     "low_stock_threshold": item.low_stock_threshold,
+                    "vendor_email": item.vendor_email,
                     "booking_id": str(booking.id),
                 },
             )
@@ -363,7 +362,6 @@ async def _reserve_inventory(
     booking.inventory_reserved = all_reserved
     if not all_reserved:
         logger.warning(f"Partial inventory reservation for booking {booking.id}")
-
 
 
 async def handle_form_completed(db: AsyncSession, event: EventLog):
@@ -432,7 +430,7 @@ async def handle_inventory_low(db: AsyncSession, event: EventLog):
     """
     When inventory drops below threshold:
     1. Log low-stock alert
-    2. (Future: notify workspace owner via email/SMS)
+    2. Send email to vendor if configured
     """
     item_id = event.entity_id
     event_data = event.event_data or {}
@@ -448,6 +446,41 @@ async def handle_inventory_low(db: AsyncSession, event: EventLog):
         f"LOW STOCK ALERT: {item.name} — {item.quantity} {item.unit} remaining "
         f"(threshold: {item.low_stock_threshold})"
     )
+
+    # Send email to vendor if configured
+    vendor_email = event_data.get("vendor_email") or item.vendor_email
+    if vendor_email:
+        try:
+            from app.services.communication_service import send_communication
+
+            message = f"""Low Stock Alert
+
+Item: {item.name}
+Current Quantity: {item.quantity} {item.unit}
+Threshold: {item.low_stock_threshold} {item.unit}
+
+Please restock this item.
+
+---
+Automated message from CareOps
+"""
+
+            await send_communication(
+                db=db,
+                workspace_id=event.workspace_id,
+                channel="email",
+                recipient=vendor_email,
+                subject=f"Low Stock Alert: {item.name}",
+                message=message,
+                automated=True,
+            )
+
+            logger.info(
+                f"Low stock email sent to vendor {vendor_email} for item {item.name}"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to send low stock email to vendor: {e}")
 
 
 async def handle_staff_replied(db: AsyncSession, event: EventLog):

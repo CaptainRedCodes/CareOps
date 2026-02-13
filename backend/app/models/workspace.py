@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -77,6 +77,47 @@ class Workspace(Base):
     email_messages = relationship(
         "EmailMessage", back_populates="workspace", cascade="all, delete-orphan"
     )
+    working_hours = relationship(
+        "WorkingHours",
+        back_populates="workspace",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    automation_rules = relationship(
+        "AutomationRule",
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<Workspace {self.business_name}>"
+
+
+class WorkingHours(Base):
+    """Workspace working hours configuration."""
+
+    __tablename__ = "working_hours"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+
+    # Store working hours as JSON: {"monday": {"is_open": true, "slots": [{"start_time": "09:00", "end_time": "17:00"}]}}
+    schedule: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    workspace = relationship("Workspace", back_populates="working_hours")

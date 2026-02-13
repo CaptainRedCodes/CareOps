@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { motion } from "motion/react";
 import { Save, Lock, User as UserIcon, Mail, Shield, CalendarDays, CheckCircle2 } from "lucide-react";
-import Navbar from "@/components/Navbar";
+import Navbar from "@/components/layout/Navbar";
 import api from "@/api/client";
 
 export default function Profile() {

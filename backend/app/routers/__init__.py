@@ -1,3 +1,39 @@
-from app.routers import auth, oauth, workspace, bookings, contact_form, contacts, conversation
+from app.routers import (
+    auth,
+    oauth,
+    workspace,
+    bookings,
+    contact_form,
+    contacts,
+    conversation,
+    inventory,
+    workspace_forms,
+    staff,
+    dashboard,
+    calendar,
+    leads,
+    form_webhooks,
+    gmail,
+    gmail_webhook,
+    automation,
+)
 
-__all__ = ["auth", "oauth", "workspace","bookings","contact_form","contacts","conversation"]
+__all__ = [
+    "auth",
+    "oauth",
+    "workspace",
+    "bookings",
+    "contact_form",
+    "contacts",
+    "conversation",
+    "inventory",
+    "workspace_forms",
+    "staff",
+    "dashboard",
+    "calendar",
+    "leads",
+    "form_webhooks",
+    "gmail",
+    "gmail_webhook",
+    "automation",
+]

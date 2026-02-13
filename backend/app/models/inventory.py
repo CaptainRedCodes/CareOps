@@ -39,6 +39,8 @@ class InventoryItem(Base):
     quantity = Column(Float, default=0)  # Current quantity available
     low_stock_threshold = Column(Float, default=5)  # Alert when below this
 
+    vendor_email = Column(String(255), nullable=True)  # Email to send low stock alerts
+
     is_active = Column(Boolean, default=True)
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

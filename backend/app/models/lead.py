@@ -112,6 +112,9 @@ class Lead(Base):
     workspace = relationship("Workspace", back_populates="leads")
     contact = relationship("Contact", back_populates="leads")
     assigned_to = relationship("User", back_populates="assigned_leads")
+    activities = relationship(
+        "LeadActivity", back_populates="lead", cascade="all, delete-orphan"
+    )
 
 
 class LeadActivity(Base):

@@ -25,6 +25,8 @@ from app.schemas.workspace import (
     WorkspaceCreate,
     WorkspaceResponse,
     ActivationStatusResponse,
+    WorkingHoursUpdate,
+    WorkingHoursResponse,
 )
 from app.services.invitation_service import invite_staff, list_invitations
 from app.services.workspace_service import (
@@ -35,6 +37,8 @@ from app.services.workspace_service import (
     get_workspace as svc_get_workspace,
     list_workspaces as svc_list_workspaces,
     remove_integration,
+    get_working_hours,
+    update_working_hours,
 )
 from app.services.verification_service import (
     verify_email_integration,
@@ -216,3 +220,29 @@ async def verify_integration(
             message="Invalid channel. Use 'email' or 'sms'.",
             channel=data.channel,
         )
+
+
+@router.get("/{workspace_id}/working-hours", response_model=WorkingHoursResponse)
+async def get_working_hours_endpoint(
+    workspace_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """Get working hours for a workspace (admin only)."""
+    working_hours = await get_working_hours(db, workspace_id)
+    if not working_hours:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Working hours not found")
+    return working_hours
+
+
+@router.put("/{workspace_id}/working-hours", response_model=WorkingHoursResponse)
+async def update_working_hours_endpoint(
+    workspace_id: UUID,
+    data: WorkingHoursUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """Update working hours for a workspace (admin only)."""
+    return await update_working_hours(db, workspace_id, data, admin)

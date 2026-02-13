@@ -19,7 +19,7 @@ export default function VerifyEmail() {
             return;
         }
 
-        api.post("/auth/verify-email", { token })
+        api.get(`/auth/verify-email?token=${encodeURIComponent(token)}`)
             .then(() => {
                 setStatus("success");
                 setMessage("Your email has been verified successfully!");

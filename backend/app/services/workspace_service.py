@@ -8,8 +8,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.workspace import Workspace
-from app.schemas.workspace import WorkspaceCreate
+from app.models.workspace import Workspace, WorkingHours
+from app.schemas.workspace import WorkspaceCreate, WorkingHoursUpdate
 
 
 async def create_workspace(
@@ -166,7 +166,8 @@ async def check_activation_readiness(
     workspace_id: UUID,
 ) -> dict:
     """Check if workspace meets activation requirements"""
-    from app.models.booking import BookingType, AvailabilityRule
+    from app.models.booking import BookingType
+    from app.models.workspace import WorkingHours
     from app.schemas.workspace import ActivationCheck
 
     result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
@@ -216,27 +217,20 @@ async def check_activation_readiness(
         )
     )
 
-    # Check 3: Availability defined
-    has_availability = False
-    if has_services:
-        for svc in service_list:
-            rules = await db.execute(
-                select(AvailabilityRule).where(
-                    AvailabilityRule.booking_type_id == svc.id,
-                    AvailabilityRule.is_active == True,
-                )
-            )
-            if rules.scalars().first():
-                has_availability = True
-                break
+    # Check 3: Working hours defined
+    working_hours_result = await db.execute(
+        select(WorkingHours).where(WorkingHours.workspace_id == workspace_id)
+    )
+    working_hours = working_hours_result.scalar_one_or_none()
+    has_availability = working_hours is not None and bool(working_hours.schedule)
 
     checks.append(
         ActivationCheck(
             name="Availability Defined",
             passed=has_availability,
-            detail="Availability rules configured"
+            detail="Working hours configured"
             if has_availability
-            else "No availability rules found",
+            else "No working hours defined",
         )
     )
 
@@ -284,3 +278,51 @@ async def activate_workspace(
     await db.commit()
     await db.refresh(workspace)
     return workspace
+
+
+async def get_working_hours(
+    db: AsyncSession, workspace_id: UUID
+) -> WorkingHours | None:
+    """Get working hours for a workspace."""
+    result = await db.execute(
+        select(WorkingHours).where(WorkingHours.workspace_id == workspace_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_working_hours(
+    db: AsyncSession, workspace_id: UUID, data: WorkingHoursUpdate, admin: User
+) -> WorkingHours:
+    """Update working hours for a workspace (admin only)."""
+    # Verify workspace exists and user owns it
+    result = await db.execute(
+        select(Workspace).where(
+            Workspace.id == workspace_id,
+            Workspace.owner_id == admin.id,
+        )
+    )
+    workspace = result.scalar_one_or_none()
+
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not own this workspace.",
+        )
+
+    # Check if working hours already exist
+    working_hours = await get_working_hours(db, workspace_id)
+
+    if working_hours:
+        # Update existing
+        working_hours.schedule = data.schedule
+    else:
+        # Create new
+        working_hours = WorkingHours(
+            workspace_id=workspace_id,
+            schedule=data.schedule,
+        )
+        db.add(working_hours)
+
+    await db.commit()
+    await db.refresh(working_hours)
+    return working_hours

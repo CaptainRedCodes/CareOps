@@ -124,6 +124,7 @@ async def record_usage(
             "quantity_used": data.quantity_used,
             "unit": item.unit,
             "low_stock_threshold": item.low_stock_threshold,
+            "vendor_email": item.vendor_email,
             "booking_id": str(data.booking_id) if data.booking_id else None,
         },
     )

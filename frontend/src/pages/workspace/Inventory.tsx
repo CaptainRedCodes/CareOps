@@ -13,6 +13,7 @@ interface InventoryItem {
     unit: string;
     quantity: number;
     low_stock_threshold: number;
+    vendor_email: string | null;
     is_active: boolean;
     is_low_stock: boolean;
     created_at: string;
@@ -35,7 +36,7 @@ const Inventory: React.FC = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
     const [formData, setFormData] = useState({
-        name: '', description: '', unit: 'units', quantity: 0, low_stock_threshold: 5
+        name: '', description: '', unit: 'units', quantity: 0, low_stock_threshold: 5, vendor_email: ''
     });
 
     useEffect(() => {
@@ -67,7 +68,7 @@ const Inventory: React.FC = () => {
             }
             setShowAddModal(false);
             setEditingItem(null);
-            setFormData({ name: '', description: '', unit: 'units', quantity: 0, low_stock_threshold: 5 });
+            setFormData({ name: '', description: '', unit: 'units', quantity: 0, low_stock_threshold: 5, vendor_email: '' });
             loadData();
         } catch (err) {
             console.error('Failed to save item', err);
@@ -91,7 +92,8 @@ const Inventory: React.FC = () => {
             description: item.description || '',
             unit: item.unit,
             quantity: item.quantity,
-            low_stock_threshold: item.low_stock_threshold
+            low_stock_threshold: item.low_stock_threshold,
+            vendor_email: item.vendor_email || ''
         });
         setShowAddModal(true);
     };
@@ -110,7 +112,7 @@ const Inventory: React.FC = () => {
                         <p className="text-muted-foreground mt-1">Track resources, supplies, and stock levels.</p>
                     </div>
                     <button
-                        onClick={() => { setEditingItem(null); setFormData({ name: '', description: '', unit: 'units', quantity: 0, low_stock_threshold: 5 }); setShowAddModal(true); }}
+                        onClick={() => { setEditingItem(null); setFormData({ name: '', description: '', unit: 'units', quantity: 0, low_stock_threshold: 5, vendor_email: '' }); setShowAddModal(true); }}
                         className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors btn-glow shadow-md"
                     >
                         <Plus className="w-4 h-4" />
@@ -279,6 +281,12 @@ const Inventory: React.FC = () => {
                                     <label className="block text-sm font-medium text-foreground mb-1">Low Stock Threshold</label>
                                     <input type="number" min="0" step="0.1" value={formData.low_stock_threshold} onChange={e => setFormData({ ...formData, low_stock_threshold: parseFloat(e.target.value) || 0 })}
                                         className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-foreground mb-1">Vendor Email</label>
+                                    <input type="email" value={formData.vendor_email} onChange={e => setFormData({ ...formData, vendor_email: e.target.value })}
+                                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="vendor@example.com" />
+                                    <p className="text-xs text-muted-foreground mt-1">Email will be sent here when stock is low</p>
                                 </div>
                             </div>
                             <div className="flex justify-end gap-3 p-6 border-t border-border">

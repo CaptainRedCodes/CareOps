@@ -37,6 +37,7 @@ from app.routers import (
     form_webhooks,
     gmail,
     gmail_webhook,
+    automation,
 )
 
 settings = get_settings()
@@ -111,6 +112,7 @@ app.include_router(leads.router, prefix="/api/v1")
 app.include_router(form_webhooks.router, prefix="/api/v1")
 app.include_router(gmail.router, prefix="/api/v1")
 app.include_router(gmail_webhook.router, prefix="/api/v1")
+app.include_router(automation.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["System"])
