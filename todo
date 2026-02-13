@@ -1,1 +1,13 @@
-Integrate more emails and sms,kbva hegc qvqu ldyw
+I1. in email service set up i need it to show whatever email comes to business so how do we show it? 2. i need to create a public form with link or qr code where customers interact and it saves leads through dashboard and automation sends welcome message. you can integrate 3rd party form too. but business should decide rules of the form and inside stuff 4.on booking its visit so i need it to send an email to customer with location details and remaineder about the viLsit 5.there is setup form which business willl be sending after booking for more information and it should be custom form setup by business and i need to be stored. 6.in inventory when anything goes out of stock send an email to vendor asking for the stock 7.inbox should be a separate space where i can track messages with each user. 8.Automation must be **event-based only**.
+
+Required rules:
+
+- New contact → welcome message
+- Booking created → confirmation
+- Before booking → reminder
+- Pending form → reminder
+- Inventory below threshold → alert
+- Staff reply → automation stops 9. integrate google calender 10. ignore phone integration Basically this is onboarding
+
+
+ wizardkbva hegc qvqu ldyw

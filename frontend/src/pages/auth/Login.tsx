@@ -7,8 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { motion } from "motion/react";
 import api from "@/api/client";
-
-const VITE_API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+import config from "@/config";
 
 export default function Login() {
     const { user, loading, login } = useAuth();
@@ -57,8 +56,8 @@ export default function Login() {
         }
     };
 
-    const handleGoogleLogin = () => {
-        window.location.href = `${VITE_API_URL}/oauth/google/login`;
+const handleGoogleLogin = () => {
+        window.location.href = `${config.apiUrl}/oauth/google/login`;
     };
 
     return (

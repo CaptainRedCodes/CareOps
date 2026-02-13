@@ -1,8 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from uuid import UUID
-from datetime import datetime
+from datetime import UTC, datetime
 from slugify import slugify  # pip install python-slugify
+import uuid
+import random
+import string
 from fastapi import HTTPException, status
 
 from app.models.contact_form import ContactForm
@@ -18,25 +21,56 @@ from app.schemas.contact_form import (
 )
 
 
+def generate_unique_slug(base_slug: str, max_attempts: int = 10) -> str:
+    """Generate a unique slug with UUID suffix if needed"""
+    if not base_slug:
+        base_slug = "form"
+
+    slug = base_slug
+    for _ in range(max_attempts):
+        # Check if slug exists in a simple way - append random suffix if needed
+        if _ > 0:
+            short_id = "".join(
+                random.choices(string.ascii_lowercase + string.digits, k=6)
+            )
+            slug = f"{base_slug}-{short_id}"
+        return slug  # Return the slug, let the DB check handle duplicates
+
+
 async def create_contact_form(
     db: AsyncSession, workspace_id: UUID, data: ContactFormCreate
 ) -> ContactForm:
-    """Create a new contact form with auto-generated slug"""
+    """Create a new contact form with auto-generated unique slug"""
 
     # Generate slug if not provided
-    if not data.slug:
-        data.slug = slugify(data.name)
+    if not data.slug or data.slug.strip() == "":
+        base_slug = slugify(data.name) if data.name else "form"
+        # Generate unique slug with UUID suffix
+        unique_id = str(uuid.uuid4())[:8]
+        data.slug = f"{base_slug}-{unique_id}"
+    else:
+        data.slug = slugify(data.slug)
 
-    # Check if slug already exists
-    existing = await db.execute(
-        select(ContactForm).where(
-            ContactForm.workspace_id == workspace_id, ContactForm.slug == data.slug
+    # Check if slug already exists and generate new one if needed
+    max_attempts = 10
+    attempts = 0
+    while attempts < max_attempts:
+        existing = await db.execute(
+            select(ContactForm).where(
+                ContactForm.workspace_id == workspace_id, ContactForm.slug == data.slug
+            )
         )
-    )
-    if existing.scalar_one_or_none():
+        if not existing.scalar_one_or_none():
+            break
+
+        # Generate new slug with different suffix
+        unique_id = str(uuid.uuid4())[:8]
+        data.slug = f"{slugify(data.name) if data.name else 'form'}-{unique_id}"
+        attempts += 1
+    else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Form with slug '{data.slug}' already exists",
+            detail="Could not generate unique slug. Please try again.",
         )
 
     form = ContactForm(workspace_id=workspace_id, **data.model_dump())
@@ -85,16 +119,21 @@ async def list_contact_forms(
 
         form_dict = {
             **form.__dict__,
+            "is_active": form.status == "active",
+            "welcome_message": form.welcome_message or "",
+            "success_message": form.success_message or "",
+            "submit_button_text": form.submit_button_text or "Submit",
+            "welcome_channel": form.welcome_channel or "email",
             "submissions": submissions,
             "conversion_rate": f"{min(submissions * 2, 100)}%",  # Mock conversion
             "last_active": last_active,
         }
-        forms_out.append(ContactFormOut(**form_dict))
+        forms_out.append(ContactFormOut.model_validate(form_dict))
 
     return forms_out
 
 
-async def get_contact_form_by_slug(db: AsyncSession, slug: str) -> ContactForm:
+async def get_contact_form_by_slug(db: AsyncSession, slug: str) -> ContactFormOut:
     """Get form by slug (public access) - returns generic error to prevent enumeration"""
     result = await db.execute(
         select(ContactForm).where(
@@ -109,7 +148,15 @@ async def get_contact_form_by_slug(db: AsyncSession, slug: str) -> ContactForm:
             status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
         )
 
-    return form
+    form_dict = {
+        **form.__dict__,
+        "is_active": form.status == "active",
+        "welcome_message": form.welcome_message or "",
+        "success_message": form.success_message or "",
+        "submit_button_text": form.submit_button_text or "Submit",
+        "welcome_channel": form.welcome_channel or "email",
+    }
+    return ContactFormOut.model_validate(form_dict)
 
 
 async def update_contact_form(
@@ -277,11 +324,6 @@ async def submit_contact_form(
 
     # Update conversation last message
     conversation.last_message_from = "contact"
-
-    # =======================================================================
-    # EVENT-DRIVEN: Emit contact.created event
-    # Automation handlers will send welcome message, etc.
-    # =======================================================================
     from app.services.event_service import emit_contact_created
 
     await emit_contact_created(
@@ -308,12 +350,19 @@ async def submit_contact_form(
     )
 
 
+from datetime import datetime, timezone
+
+
 def format_time_ago(dt: datetime) -> str:
     """Format datetime to human-readable 'time ago'"""
     if not dt:
         return "Never"
 
-    now = datetime.utcnow()
+    # Make datetime timezone-aware if needed
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
     diff = now - dt
 
     if diff.days == 0:

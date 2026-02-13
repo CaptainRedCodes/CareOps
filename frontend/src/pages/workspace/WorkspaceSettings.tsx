@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Settings, CheckCircle2, XCircle, Zap, Shield,
-    Radio, Calendar, Clock, AlertTriangle, ExternalLink, Copy, QrCode
+    Radio, Calendar, Clock, AlertTriangle, ExternalLink, Copy, QrCode, ArrowRight
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
-import api from '@/api/client';
+import api, { showSuccess, showError } from '@/api/client';
+import { Button } from '@/components/ui/button';
+import config from '@/config';
 
 interface ActivationCheck {
     name: string;
@@ -44,13 +46,15 @@ const WorkspaceSettings: React.FC = () => {
         }
     };
 
-    const handleActivate = async () => {
+const handleActivate = async () => {
         try {
             setActivating(true);
             await api.post(`/workspaces/${workspaceId}/activate`);
             await loadStatus();
+            showSuccess('Workspace activated successfully!');
         } catch (err: any) {
-            alert(err.response?.data?.detail || 'Failed to activate workspace');
+            const message = err.response?.data?.error?.message || err.response?.data?.detail || 'Failed to activate workspace';
+            showError(message);
         } finally {
             setActivating(false);
         }
@@ -78,13 +82,13 @@ const WorkspaceSettings: React.FC = () => {
     };
 
     const copyBookingUrl = () => {
-        const url = `${window.location.origin}/book/${workspaceId}`;
+        const url = `${config.frontendUrl}/book/${workspaceId}`;
         navigator.clipboard.writeText(url);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const publicBookingUrl = `${window.location.origin}/book/${workspaceId}`;
+    const publicBookingUrl = `${config.frontendUrl}/book/${workspaceId}`;
 
     return (
         <div className="flex h-full w-full bg-background text-foreground overflow-y-auto">
@@ -128,18 +132,28 @@ const WorkspaceSettings: React.FC = () => {
                                 </div>
                             </div>
 
-                            {!status.is_activated && (
-                                <button
-                                    onClick={handleActivate}
-                                    disabled={!status.can_activate || activating}
-                                    className={`mt-4 flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all ${status.can_activate
-                                        ? 'bg-primary text-primary-foreground hover:bg-primary/90 btn-glow shadow-lg shadow-primary/30'
-                                        : 'bg-secondary text-muted-foreground cursor-not-allowed'
-                                        }`}
-                                >
-                                    <Zap className="w-5 h-5" />
-                                    {activating ? 'Activating...' : status.can_activate ? 'Activate Now' : 'Complete Requirements First'}
-                                </button>
+{!status.is_activated && (
+                                <div className="flex gap-3 mt-4">
+                                    <button
+                                        onClick={handleActivate}
+                                        disabled={!status.can_activate || activating}
+                                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all ${status.can_activate
+                                            ? 'bg-primary text-primary-foreground hover:bg-primary/90 btn-glow shadow-lg shadow-primary/30'
+                                            : 'bg-secondary text-muted-foreground cursor-not-allowed'
+                                            }`}
+                                    >
+                                        <Zap className="w-5 h-5" />
+                                        {activating ? 'Activating...' : status.can_activate ? 'Activate Now' : 'Complete Requirements First'}
+                                    </button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => navigate(`/workspace/${workspaceId}/setup`)}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <span>Open Setup Wizard</span>
+                                        <ArrowRight className="w-4 h-4" />
+                                    </Button>
+                                </div>
                             )}
                         </div>
 

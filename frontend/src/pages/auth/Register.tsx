@@ -7,8 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { motion } from "motion/react";
 import { CheckCircle2 } from "lucide-react";
-
-const VITE_API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+import config from "@/config";
 
 export default function Register() {
     const { user, loading, register } = useAuth();
@@ -49,7 +48,7 @@ export default function Register() {
     };
 
     const handleGoogleLogin = () => {
-        window.location.href = `${VITE_API_URL}/oauth/google/login`;
+        window.location.href = `${config.apiUrl}/oauth/google/login`;
     };
 
     return (

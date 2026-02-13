@@ -17,6 +17,7 @@ import {
     X
 } from 'lucide-react';
 import api from '@/api/client';
+import config from '@/config';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 
@@ -148,8 +149,8 @@ const ContactForms: React.FC = () => {
         }
     };
 
-    const copyFormLink = (slug: string) => {
-        const link = `${window.location.origin}/public/forms/${slug}`;
+const copyFormLink = (slug: string) => {
+        const link = `${config.frontendUrl}/public/forms/${slug}`;
         navigator.clipboard.writeText(link);
         alert('Form link copied to clipboard!');
     };

@@ -1,40 +1,49 @@
+version: '3.8'
+
 services:
   db:
     image: postgres:16
-    container_name: postgres_db
+    container_name: careops_db
     restart: unless-stopped
-    env_file:
-      - .env
-      - .env.docker
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-careops}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
       context: ./backend
-    container_name: fastapi_backend
+      dockerfile: Dockerfile
+    container_name: careops_backend
     restart: unless-stopped
-    env_file:
-      - .env.common
-      - .env.docker
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-careops}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-careops}
       PYTHONUNBUFFERED: 1
+    env_file:
+      - .env.production
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     expose:
       - "8000"
 
   frontend:
     build:
       context: ./frontend
-    container_name: react_frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=https://your-domain.com/api/v1
+        - VITE_FRONTEND_URL=https://your-domain.com
+    container_name: careops_frontend
     restart: unless-stopped
     ports:
       - "3000:80"

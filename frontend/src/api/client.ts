@@ -1,4 +1,5 @@
 import axios from "axios";
+import { toast } from "sonner";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
@@ -27,6 +28,28 @@ const processQueue = (error: unknown, token: string | null = null) => {
         else prom.resolve(token);
     });
     failedQueue = [];
+};
+
+const extractErrorMessage = (error: unknown): string => {
+    if (axios.isAxiosError(error)) {
+        const data = error.response?.data;
+        
+        if (data?.error?.message) {
+            return data.error.message;
+        }
+        
+        if (data?.detail) {
+            if (typeof data.detail === "string") {
+                return data.detail;
+            }
+            if (Array.isArray(data.detail)) {
+                return data.detail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join(", ");
+            }
+        }
+        
+        return error.message || "An error occurred";
+    }
+    return "An unexpected error occurred";
 };
 
 api.interceptors.response.use(
@@ -72,8 +95,29 @@ api.interceptors.response.use(
             }
         }
 
+        if (error.response?.status !== 401) {
+            const message = extractErrorMessage(error);
+            toast.error(message);
+        }
+
         return Promise.reject(error);
     }
 );
+
+export const showSuccess = (message: string) => {
+    toast.success(message);
+};
+
+export const showError = (message: string) => {
+    toast.error(message);
+};
+
+export const showInfo = (message: string) => {
+    toast.info(message);
+};
+
+export const showWarning = (message: string) => {
+    toast.warning(message);
+};
 
 export default api;

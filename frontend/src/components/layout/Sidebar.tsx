@@ -14,7 +14,8 @@ import {
     UsersRound,
     FormInput,
     Mail,
-    Zap
+    Zap,
+    Globe
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useHasPermission } from "@/hooks/useHasPermission";
@@ -98,6 +99,13 @@ export default function Sidebar() {
             name: "Form Builder",
             href: `/workspace/${workspaceId}/form-builder`,
             icon: FormInput,
+            permission: null,
+            adminOnly: true
+        },
+        {
+            name: "Third-Party Forms",
+            href: `/workspace/${workspaceId}/third-party-forms`,
+            icon: Globe,
             permission: null,
             adminOnly: true
         },

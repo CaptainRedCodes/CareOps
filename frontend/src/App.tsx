@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { Toaster } from "@/components/ui/sonner";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 // Pages - Public
@@ -20,6 +21,7 @@ import OAuthCallback from "@/pages/auth/OAuthCallback";
 
 // Pages - Workspace
 import CreateWorkspace from "@/pages/workspace/CreateWorkspace";
+import SetupWizard from "@/pages/workspace/SetupWizard";
 import WorkspaceView from "@/pages/workspace/WorkspaceView";
 import WorkspaceSettings from "@/pages/workspace/WorkspaceSettings";
 import InviteStaff from "@/pages/workspace/InviteStaff";
@@ -35,6 +37,7 @@ import Profile from "@/pages/workspace/Profile";
 import WorkingHours from "@/pages/workspace/WorkingHours";
 import Leads from "@/pages/workspace/Leads";
 import FormBuilder from "@/pages/workspace/FormBuilder";
+import ThirdPartyForms from "@/pages/workspace/ThirdPartyForms";
 import GmailSettings from "@/pages/workspace/GmailSettings";
 import AutomationSettings from "@/pages/workspace/AutomationSettings";
 
@@ -45,6 +48,7 @@ function App() {
     return (
         <BrowserRouter>
             <AuthProvider>
+                <Toaster position="top-right" />
                 <Routes>
                     {/* Public routes */}
                     <Route path="/" element={<Home />} />
@@ -61,6 +65,7 @@ function App() {
                     <Route element={<ProtectedRoute />}>
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/workspace/new" element={<CreateWorkspace />} />
+                        <Route path="/workspace/:workspaceId/setup" element={<SetupWizard />} />
                         <Route path="/profile" element={<Profile />} />
                         <Route path="/force-change-password" element={<ForceChangePassword />} />
                         <Route path="/workspace/:workspaceId" element={<WorkspaceLayout />}>
@@ -76,6 +81,7 @@ function App() {
                             <Route path="working-hours" element={<WorkingHours />} />
                             <Route path="leads" element={<Leads />} />
                             <Route path="form-builder" element={<FormBuilder />} />
+                            <Route path="third-party-forms" element={<ThirdPartyForms />} />
                             <Route path="gmail" element={<GmailSettings />} />
                             <Route path="automation" element={<AutomationSettings />} />
                         </Route>

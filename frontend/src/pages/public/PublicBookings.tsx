@@ -86,19 +86,25 @@ const PublicBookings: React.FC = () => {
     try {
       setLoading(true);
       setSelectedTime(null);
+      setError(null);
       
       const date = new Date(selectedDate);
-      date.setHours(12, 0, 0, 0);
+      const dateStr = date.toISOString().split('T')[0];
       
       const response = await fetch(
-        `${API_URL}/public/bookings/services/${selectedService.id}/available-slots?date=${date.toISOString()}`
+        `${API_URL}/public/bookings/services/${selectedService.id}/available-slots?date=${dateStr}`
       );
       
-      if (!response.ok) throw new Error('Failed to load available times');
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.detail || 'Failed to load available times');
+      }
       const data = await response.json();
       setAvailableSlots(data.slots || []);
-    } catch (err) {
-      setError('Unable to load available times. Please try again.');
+    } catch (err: any) {
+      console.error('Available slots error:', err);
+      setError(err.message || 'Unable to load available times. Please try again.');
+      setAvailableSlots([]);
     } finally {
       setLoading(false);
     }

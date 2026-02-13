@@ -41,7 +41,6 @@ from app.schemas.booking import (
 )
 from app.repositories.booking_repository import BookingRepository
 from app.repositories.workspace_repository import WorkspaceRepository
-from app.services.calendar_service import CalendarService
 
 logger = logging.getLogger(__name__)
 
@@ -133,15 +132,29 @@ async def create_booking_type(
     db.add(booking_type)
     await db.flush()
 
-    # Add availability rules
-    for rule_data in data.availability_rules:
-        rule = AvailabilityRule(
-            booking_type_id=booking_type.id,
-            day_of_week=rule_data.day_of_week,
-            start_time=rule_data.start_time,
-            end_time=rule_data.end_time,
-        )
-        db.add(rule)
+    # Add availability rules - use provided rules or create default (9am-5pm weekdays)
+    if data.availability_rules and len(data.availability_rules) > 0:
+        for rule_data in data.availability_rules:
+            rule = AvailabilityRule(
+                booking_type_id=booking_type.id,
+                day_of_week=rule_data.day_of_week,
+                start_time=rule_data.start_time,
+                end_time=rule_data.end_time,
+            )
+            db.add(rule)
+    else:
+        # Create default availability: Mon-Fri 9am to 5pm
+        from datetime import time
+
+        for day in range(5):  # Monday to Friday (0-4)
+            rule = AvailabilityRule(
+                booking_type_id=booking_type.id,
+                day_of_week=day,
+                start_time=time(9, 0),  # 9:00 AM
+                end_time=time(17, 0),  # 5:00 PM
+                is_active=True,
+            )
+            db.add(rule)
 
     await db.commit()
     await db.refresh(booking_type)
@@ -302,15 +315,7 @@ async def get_available_slots(
         booking_type_id, start_of_day, end_of_day
     )
 
-    # Check Google Calendar conflicts
-    calendar_service = CalendarService(db)
-    calendar_conflicts = await calendar_service.check_calendar_conflicts(
-        booking_type.workspace_id,
-        datetime.combine(target_date, time.min),
-        datetime.combine(target_date, time.max),
-    )
-
-    # Filter out booked slots, past slots, and calendar conflicts
+    # Filter out booked slots and past slots
     now = datetime.now()
     available_slots = []
 
@@ -329,19 +334,6 @@ async def get_available_slots(
             ):
                 is_available = False
                 break
-
-        # Check if slot conflicts with calendar events
-        if is_available and calendar_conflicts:
-            for conflict in calendar_conflicts:
-                conflict_start = datetime.fromisoformat(
-                    conflict["start"].replace("Z", "+00:00")
-                )
-                conflict_end = datetime.fromisoformat(
-                    conflict["end"].replace("Z", "+00:00")
-                )
-                if slot.start_time < conflict_end and slot.end_time > conflict_start:
-                    is_available = False
-                    break
 
         if is_available:
             available_slots.append(slot)
@@ -405,18 +397,6 @@ async def create_booking(db: AsyncSession, data: BookingCreate) -> dict:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Timeslot is no longer available",
-        )
-
-    # 3b. Check Google Calendar conflicts
-    calendar_service = CalendarService(db)
-    calendar_conflicts = await calendar_service.check_calendar_conflicts(
-        workspace_id, data.start_time, booking_end_time
-    )
-
-    if calendar_conflicts:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This time is busy on the calendar. Please choose another time.",
         )
 
     # 4. Contact Management
@@ -497,48 +477,6 @@ async def create_booking(db: AsyncSession, data: BookingCreate) -> dict:
     # 7. COMMIT - This finalizes the transaction
     await db.commit()
     await db.refresh(booking)
-
-    # 7b. Sync to Google Calendar (post-commit)
-    try:
-        from sqlalchemy import select
-        from app.models.calendar_integration import CalendarIntegration
-
-        result = await db.execute(
-            select(CalendarIntegration).where(
-                CalendarIntegration.workspace_id == workspace_id,
-                CalendarIntegration.is_active == True,
-                CalendarIntegration.sync_enabled == True,
-            )
-        )
-        calendar_integration = result.scalar_one_or_none()
-
-        if calendar_integration:
-            location = None
-            if booking_type.location_type == "in_person":
-                location = booking_type.location_details or workspace.address
-            elif booking_type.location_type == "video":
-                location = booking_type.location_details or "Video Call"
-
-            description = f"Booking for {contact.name}"
-            if contact.email:
-                description += f"\nEmail: {contact.email}"
-            if contact.phone:
-                description += f"\nPhone: {contact.phone}"
-            if data.customer_notes:
-                description += f"\n\nNotes: {data.customer_notes}"
-
-            await calendar_service.create_calendar_event(
-                integration=calendar_integration,
-                booking_id=booking.id,
-                title=f"{booking_type.name} - {contact.name}",
-                start_time=booking.start_time,
-                end_time=booking.end_time,
-                description=description,
-                location=location,
-            )
-    except Exception as e:
-        logger.error(f"Failed to sync booking to calendar: {e}")
-        # Don't fail the booking if calendar sync fails
 
     # 8. EMIT EVENTS - Post-commit only
     # Note: If emission fails here, we log it, but booking remains valid

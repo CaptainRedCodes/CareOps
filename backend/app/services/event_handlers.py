@@ -28,10 +28,11 @@ logger = logging.getLogger(__name__)
 async def handle_contact_created(db: AsyncSession, event: EventLog):
     """
     When contact is created:
-    1. Send welcome message (if configured)
+    1. Send welcome message (if configured) - either from form or default
     """
     contact_id = event.entity_id
     workspace_id = event.workspace_id
+    event_data = event.event_data or {}
 
     result = await db.execute(select(Contact).where(Contact.id == contact_id))
     contact = result.scalar_one_or_none()
@@ -52,42 +53,62 @@ async def handle_contact_created(db: AsyncSession, event: EventLog):
 
     try:
         from app.services.communication_service import send_communication
+        from app.models.contact_form import ContactForm
 
         channel = "email" if contact.email else "sms"
         recipient = contact.email or contact.phone
 
-        welcome_message = (
-            f"Thank you for contacting us, {contact.name}! We will be in touch shortly."
-        )
+        welcome_message = None
+        should_send_welcome = True
 
-        await send_communication(
-            db=db,
-            workspace_id=workspace_id,
-            channel=channel,
-            recipient=recipient,
-            subject="Thank you for reaching out!",
-            message=welcome_message,
-            sent_by_staff=False,
-            automated=True,
-        )
+        # Check if this contact was created from a form
+        form_slug = event_data.get("form_slug")
+        if form_slug:
+            # Get form's welcome message settings
+            result = await db.execute(
+                select(ContactForm).where(ContactForm.slug == form_slug)
+            )
+            form = result.scalar_one_or_none()
+            if form:
+                if not form.welcome_message_enabled:
+                    should_send_welcome = False
+                else:
+                    welcome_message = form.welcome_message
 
-        msg = Message(
-            conversation_id=conversation.id,
-            channel=channel,
-            direction="outbound",
-            sender="System",
-            recipient=recipient,
-            subject="Thank you for reaching out!",
-            body=welcome_message,
-            sent_by_staff=False,
-            automated=True,
-            status="sent",
-        )
-        db.add(msg)
+        # If no form or form doesn't have custom message, use default
+        if not welcome_message:
+            welcome_message = f"Thank you for contacting us, {contact.name}! We will be in touch shortly."
 
-        conversation.last_message_from = "system"
+        # Send welcome message only if enabled
+        if should_send_welcome and recipient:
+            await send_communication(
+                db=db,
+                workspace_id=workspace_id,
+                channel=channel,
+                recipient=recipient,
+                subject="Thank you for reaching out!",
+                message=welcome_message,
+                sent_by_staff=False,
+                automated=True,
+            )
 
-        logger.info(f"Welcome message sent to contact {contact_id}")
+            msg = Message(
+                conversation_id=conversation.id,
+                channel=channel,
+                direction="outbound",
+                sender="System",
+                recipient=recipient,
+                subject="Thank you for reaching out!",
+                body=welcome_message,
+                sent_by_staff=False,
+                automated=True,
+                status="sent",
+            )
+            db.add(msg)
+
+            conversation.last_message_from = "system"
+
+            logger.info(f"Welcome message sent to contact {contact_id}")
 
     except Exception as e:
         logger.error(f"Failed to send welcome message: {e}")

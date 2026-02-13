@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import api from "@/api/client";
+import api, { showSuccess, showError } from "@/api/client";
 import { motion } from "motion/react";
 import { ArrowLeft, Building2, MapPin, Globe, Mail, CheckCircle2 } from "lucide-react";
 
@@ -39,17 +39,18 @@ export default function CreateWorkspace() {
         setError("");
         setLoading(true);
         try {
-            await api.post("/workspaces", {
+            const res = await api.post("/workspaces", {
                 business_name: businessName,
                 address,
                 timezone,
                 contact_email: contactEmail,
             });
-            navigate("/dashboard");
+            showSuccess("Workspace created successfully!");
+            navigate(`/workspace/${res.data.id}/setup`);
         } catch (err: any) {
-            setError(
-                err.response?.data?.detail || "Failed to create workspace."
-            );
+            const message = err.response?.data?.error?.message || err.response?.data?.detail || "Failed to create workspace.";
+            showError(message);
+            setError(message);
         } finally {
             setLoading(false);
         }

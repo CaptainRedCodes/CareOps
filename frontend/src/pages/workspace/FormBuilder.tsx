@@ -3,10 +3,8 @@ import { useParams } from 'react-router-dom';
 import {
   Plus,
   Trash2,
-  GripVertical,
   Copy,
   QrCode,
-  ExternalLink,
   CheckCircle2,
   AlertCircle,
   Loader2,
@@ -15,9 +13,13 @@ import {
   Code
 } from 'lucide-react';
 import api from "@/api/client";
+import config from "@/config";
+import { Spinner } from '@/components/ui/spinner';
+import { Button } from '@/components/ui/button';
 
 interface FormField {
   id: string;
+  name: string;
   type: 'text' | 'email' | 'phone' | 'textarea' | 'select' | 'checkbox';
   label: string;
   placeholder: string;
@@ -31,10 +33,13 @@ interface ContactForm {
   slug: string;
   description: string;
   fields: FormField[];
+  status: string;
   is_active: boolean;
+  welcome_message_enabled: boolean;
   welcome_message: string;
-  success_message: string;
+  welcome_channel: string;
   submit_button_text: string;
+  success_message: string;
 }
 
 export default function FormBuilder() {
@@ -49,10 +54,25 @@ export default function FormBuilder() {
   const fetchForms = async () => {
     try {
       setLoading(true);
+      console.log('Fetching forms for workspace:', workspaceId);
       const response = await api.get(`/workspaces/${workspaceId}/forms`);
-      setForms(response.data);
+      console.log('Forms response:', response);
+
+      let formsData = response?.data || [];
+
+      // Ensure each field has a unique ID
+      formsData = formsData.map((form: any) => ({
+        ...form,
+        fields: (form.fields || []).map((field: any, index: number) => ({
+          ...field,
+          id: field.id || `field_${index}_${Date.now()}`
+        }))
+      }));
+
+      setForms(formsData);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load forms');
+      console.error('Failed to load forms:', err);
+      setError(err.response?.data?.detail || err.message || 'Failed to load forms');
     } finally {
       setLoading(false);
     }
@@ -69,14 +89,17 @@ export default function FormBuilder() {
       slug: '',
       description: '',
       fields: [
-        { id: '1', type: 'text', label: 'Full Name', placeholder: 'Enter your name', required: true },
-        { id: '2', type: 'email', label: 'Email', placeholder: 'Enter your email', required: true },
-        { id: '3', type: 'textarea', label: 'Message', placeholder: 'How can we help you?', required: false }
+        { id: '1', name: 'name', type: 'text', label: 'Full Name', placeholder: 'Enter your name', required: true },
+        { id: '2', name: 'email', type: 'email', label: 'Email', placeholder: 'Enter your email', required: true },
+        { id: '3', name: 'message', type: 'textarea', label: 'Message', placeholder: 'How can we help you?', required: false }
       ],
-      is_active: true,
+      status: 'draft',
+      is_active: false,
+      welcome_message_enabled: true,
       welcome_message: 'Thank you for contacting us! We will be in touch shortly.',
-      success_message: 'Thank you! Your message has been received.',
-      submit_button_text: 'Send Message'
+      welcome_channel: 'email',
+      submit_button_text: 'Send Message',
+      success_message: 'Thank you! Your message has been received.'
     };
     setSelectedForm(newForm);
     setIsEditing(true);
@@ -87,13 +110,13 @@ export default function FormBuilder() {
 
     try {
       setLoading(true);
-      
+
       if (selectedForm.id === 'new') {
         await api.post(`/workspaces/${workspaceId}/forms`, selectedForm);
       } else {
         await api.put(`/workspaces/${workspaceId}/forms/${selectedForm.id}`, selectedForm);
       }
-      
+
       await fetchForms();
       setIsEditing(false);
       setSelectedForm(null);
@@ -115,17 +138,24 @@ export default function FormBuilder() {
     }
   };
 
+  const generateUniqueSlug = (name: string) => {
+    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const uniqueId = Math.random().toString(36).substring(2, 10);
+    return `${base}-${uniqueId}`;
+  };
+
   const addField = () => {
     if (!selectedForm) return;
-    
+
     const newField: FormField = {
       id: Date.now().toString(),
+      name: 'field_' + Date.now().toString(),
       type: 'text',
       label: 'New Field',
       placeholder: '',
       required: false
     };
-    
+
     setSelectedForm({
       ...selectedForm,
       fields: [...selectedForm.fields, newField]
@@ -134,18 +164,26 @@ export default function FormBuilder() {
 
   const updateField = (fieldId: string, updates: Partial<FormField>) => {
     if (!selectedForm) return;
-    
+
+    console.log('Updating field:', fieldId, 'with:', updates);
+    console.log('All fields:', selectedForm.fields);
+
+    const newFields = selectedForm.fields.map(f => {
+      if (f.id === fieldId) {
+        return { ...f, ...updates };
+      }
+      return f;
+    });
+
     setSelectedForm({
       ...selectedForm,
-      fields: selectedForm.fields.map(f => 
-        f.id === fieldId ? { ...f, ...updates } : f
-      )
+      fields: newFields
     });
   };
 
   const removeField = (fieldId: string) => {
     if (!selectedForm) return;
-    
+
     setSelectedForm({
       ...selectedForm,
       fields: selectedForm.fields.filter(f => f.id !== fieldId)
@@ -154,13 +192,13 @@ export default function FormBuilder() {
 
   const moveField = (index: number, direction: 'up' | 'down') => {
     if (!selectedForm) return;
-    
+
     const newIndex = direction === 'up' ? index - 1 : index + 1;
     if (newIndex < 0 || newIndex >= selectedForm.fields.length) return;
-    
+
     const newFields = [...selectedForm.fields];
     [newFields[index], newFields[newIndex]] = [newFields[newIndex], newFields[index]];
-    
+
     setSelectedForm({
       ...selectedForm,
       fields: newFields
@@ -168,7 +206,7 @@ export default function FormBuilder() {
   };
 
   const copyFormUrl = (slug: string) => {
-    const url = `${window.location.origin}/form/${slug}`;
+    const url = `${config.frontendUrl}/form/${slug}`;
     navigator.clipboard.writeText(url);
     alert('Form URL copied to clipboard!');
   };
@@ -192,7 +230,7 @@ export default function FormBuilder() {
               Create custom forms to capture leads from your website or share via link.
             </p>
           </div>
-          
+
           {!isEditing && (
             <button
               onClick={handleCreateForm}
@@ -224,7 +262,7 @@ export default function FormBuilder() {
               >
                 ← Back to Forms
               </button>
-              
+
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleSaveForm}
@@ -244,7 +282,7 @@ export default function FormBuilder() {
             {/* Form Settings */}
             <div className="bg-card border border-border rounded-xl p-6 space-y-4">
               <h3 className="font-semibold text-lg">Form Settings</h3>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">Form Name</label>
@@ -255,19 +293,41 @@ export default function FormBuilder() {
                     className="w-full px-3 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:border-brand"
                   />
                 </div>
-                
+
                 <div>
-                  <label className="block text-sm font-medium mb-2">URL Slug</label>
-                  <input
-                    type="text"
-                    value={selectedForm.slug}
-                    onChange={(e) => setSelectedForm({ ...selectedForm, slug: e.target.value })}
-                    placeholder="contact-form"
-                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:border-brand"
-                  />
+                  <label className="block text-sm font-medium mb-2">
+                    URL Slug
+                    {selectedForm.id === 'new' && (
+                      <span className="text-xs text-muted-foreground ml-2">(auto-generated)</span>
+                    )}
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={selectedForm.slug}
+                      onChange={(e) => setSelectedForm({ ...selectedForm, slug: e.target.value })}
+                      placeholder="contact-form"
+                      className="flex-1 px-3 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:border-brand"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setSelectedForm({
+                          ...selectedForm,
+                          slug: generateUniqueSlug(selectedForm.name),
+                        })
+                      }
+                    >
+                      Generate Slug
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Preview: {typeof window !== 'undefined' ? window.location.origin : ''}/form/{selectedForm.slug || 'your-form'}
+                  </p>
                 </div>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium mb-2">Description</label>
                 <textarea
@@ -277,8 +337,27 @@ export default function FormBuilder() {
                   className="w-full px-3 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:border-brand resize-none"
                 />
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Status</label>
+                  <select
+                    value={selectedForm.status || 'draft'}
+                    onChange={(e) => {
+                      const newStatus = e.target.value;
+                      setSelectedForm({ ...selectedForm, status: newStatus, is_active: newStatus === 'active' });
+                    }}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:border-brand text-foreground"
+                  >
+                    <option value="draft">Draft - Not visible to public</option>
+                    <option value="active">Active - Live and accessible</option>
+                    <option value="archived">Archived - Hidden</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Current: {selectedForm.status === 'active' ? '🟢 Active' : selectedForm.status === 'draft' ? '🟡 Draft' : '⚪ Archived'}
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium mb-2">Submit Button Text</label>
                   <input
@@ -288,7 +367,9 @@ export default function FormBuilder() {
                     className="w-full px-3 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:border-brand"
                   />
                 </div>
-                
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">Success Message</label>
                   <input
@@ -297,6 +378,40 @@ export default function FormBuilder() {
                     onChange={(e) => setSelectedForm({ ...selectedForm, success_message: e.target.value })}
                     className="w-full px-3 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:border-brand"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Welcome Message</label>
+                  <input
+                    type="text"
+                    value={selectedForm.welcome_message}
+                    onChange={(e) => setSelectedForm({ ...selectedForm, welcome_message: e.target.value })}
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:border-brand"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedForm.welcome_message_enabled}
+                    onChange={(e) => setSelectedForm({ ...selectedForm, welcome_message_enabled: e.target.checked })}
+                    className="rounded border-border"
+                  />
+                  <span className="text-sm">Enable Welcome Message</span>
+                </label>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2 ml-4">Channel</label>
+                  <select
+                    value={selectedForm.welcome_channel}
+                    onChange={(e) => setSelectedForm({ ...selectedForm, welcome_channel: e.target.value })}
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:border-brand"
+                  >
+                    <option value="email">Email</option>
+                    <option value="sms">SMS</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -339,6 +454,16 @@ export default function FormBuilder() {
                       </div>
 
                       <div className="flex-1 grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-muted-foreground mb-1">Field Name</label>
+                          <input
+                            type="text"
+                            value={field.name}
+                            onChange={(e) => updateField(field.id, { name: e.target.value })}
+                            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-brand"
+                          />
+                        </div>
+
                         <div>
                           <label className="block text-xs text-muted-foreground mb-1">Field Type</label>
                           <select
@@ -442,24 +567,28 @@ export default function FormBuilder() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="font-semibold text-lg">{form.name}</h3>
-                        {form.is_active ? (
+                        {form.status === 'active' ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                             Active
                           </span>
+                        ) : form.status === 'draft' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+                            Draft
+                          </span>
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                            Inactive
+                            Archived
                           </span>
                         )}
                       </div>
-                      
+
                       <p className="text-muted-foreground text-sm mb-4">
                         {form.description || 'No description'}
                       </p>
-                      
+
                       <div className="flex items-center gap-4 text-sm">
                         <span className="text-muted-foreground">
-                          {form.fields.length} fields
+                          {form.fields?.length || 0} fields
                         </span>
                         <span className="text-muted-foreground">•</span>
                         <code className="bg-secondary px-2 py-0.5 rounded text-xs">
@@ -476,7 +605,7 @@ export default function FormBuilder() {
                       >
                         <Copy className="w-4 h-4 text-muted-foreground" />
                       </button>
-                      
+
                       <button
                         onClick={() => setShowQR(showQR === form.id ? null : form.id)}
                         className="p-2 hover:bg-secondary rounded-lg transition-colors"
@@ -484,9 +613,9 @@ export default function FormBuilder() {
                       >
                         <QrCode className="w-4 h-4 text-muted-foreground" />
                       </button>
-                      
+
                       <a
-                        href={`/form/${form.slug}`}
+                        href={`${config.frontendUrl}/form/${form.slug}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="p-2 hover:bg-secondary rounded-lg transition-colors"
@@ -494,10 +623,18 @@ export default function FormBuilder() {
                       >
                         <Eye className="w-4 h-4 text-muted-foreground" />
                       </a>
-                      
+
                       <button
                         onClick={() => {
-                          setSelectedForm(form);
+                          // Ensure fields have unique IDs before editing
+                          const formWithFieldIds = {
+                            ...form,
+                            fields: (form.fields || []).map((f: any, idx: number) => ({
+                              ...f,
+                              id: f.id || `field_${idx}_${Date.now()}`
+                            }))
+                          };
+                          setSelectedForm(formWithFieldIds);
                           setIsEditing(true);
                         }}
                         className="p-2 hover:bg-secondary rounded-lg transition-colors"
@@ -505,7 +642,7 @@ export default function FormBuilder() {
                       >
                         <Code className="w-4 h-4 text-muted-foreground" />
                       </button>
-                      
+
                       <button
                         onClick={() => handleDeleteForm(form.id)}
                         className="p-2 hover:bg-red-500/10 text-red-500 rounded-lg transition-colors"
@@ -520,7 +657,6 @@ export default function FormBuilder() {
                     <div className="mt-4 pt-4 border-t border-border">
                       <div className="flex items-center gap-4">
                         <div className="bg-white p-4 rounded-lg">
-                          {/* Placeholder for QR code - would use a QR library */}
                           <div className="w-32 h-32 bg-gray-200 flex items-center justify-center">
                             <QrCode className="w-16 h-16 text-gray-400" />
                           </div>
@@ -532,8 +668,7 @@ export default function FormBuilder() {
                           </p>
                           <button
                             onClick={() => {
-                              const url = `${window.location.origin}/form/${form.slug}`;
-                              // Would download QR code image
+                              const url = `${config.frontendUrl}/form/${form.slug}`;
                               alert(`QR Code URL: ${url}`);
                             }}
                             className="text-sm text-primary hover:text-primary/80 transition-colors"
