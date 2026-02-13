@@ -95,19 +95,18 @@ async def list_contact_forms(
 
 
 async def get_contact_form_by_slug(db: AsyncSession, slug: str) -> ContactForm:
-    """Get form by slug (public access)"""
-
+    """Get form by slug (public access) - returns generic error to prevent enumeration"""
     result = await db.execute(
         select(ContactForm).where(
             ContactForm.slug == slug,
-            ContactForm.status == "active",  # Only active forms
+            ContactForm.status == "active",
         )
     )
     form = result.scalar_one_or_none()
 
     if not form:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Form not found or inactive"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
         )
 
     return form

@@ -221,7 +221,7 @@ async def update_booking_type(
 
 
 async def get_available_slots(
-    db: AsyncSession, booking_type_id: UUID, date: datetime
+    db: AsyncSession, booking_type_id: UUID, date: datetime, workspace_id: UUID = None
 ) -> AvailableSlotsResponse:
     """
     Get available time slots for a booking type on a specific date.
@@ -235,9 +235,11 @@ async def get_available_slots(
     """
     booking_repo = BookingRepository(db)
 
-    # Use repo method instead of direct query
     booking_type = await booking_repo.get_booking_type(booking_type_id)
     if not booking_type:
+        raise HTTPException(status_code=404, detail="Booking type not found")
+
+    if workspace_id and booking_type.workspace_id != workspace_id:
         raise HTTPException(status_code=404, detail="Booking type not found")
 
     # Check if date is within booking window
@@ -643,7 +645,7 @@ async def update_booking_status(
     user_id: UUID = None,
 ) -> Booking:
     """
-    Update booking status with transition validation.
+    Update booking status with transition validation - validates workspace access.
     """
     result = await db.execute(
         select(Booking).where(
@@ -653,6 +655,13 @@ async def update_booking_status(
     booking = result.scalar_one_or_none()
 
     if not booking:
+        check_result = await db.execute(select(Booking).where(Booking.id == booking_id))
+        exists = check_result.scalar_one_or_none()
+        if exists:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this booking",
+            )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found"
         )

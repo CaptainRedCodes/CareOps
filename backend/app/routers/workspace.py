@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
-from app.dependencies import get_current_user, require_admin
+from app.dependencies import get_current_user, require_admin, require_workspace_member
 from app.models.user import User
 from app.schemas.invitation import InvitationResponse, InviteStaffRequest
 from app.schemas.workspace import (
@@ -92,7 +92,7 @@ async def add_integration(
 async def list_integrations(
     workspace_id: UUID,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_workspace_member),
 ):
     """List all communication integrations for a workspace."""
     result = await db.execute(
@@ -107,7 +107,7 @@ async def list_integrations(
 async def get_logs(
     workspace_id: UUID,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_workspace_member),
 ):
     """Get communication logs for a workspace."""
     result = await db.execute(

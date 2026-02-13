@@ -63,7 +63,12 @@ async def get_workspace(db: AsyncSession, workspace_id: UUID, user) -> Workspace
             detail="Workspace not found.",
         )
 
-    if user.role == UserRole.ADMIN and workspace.owner_id == user.id:
+    if user.role == UserRole.ADMIN:
+        if workspace.owner_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this workspace.",
+            )
         return workspace
 
     if user.role == UserRole.STAFF:
@@ -73,8 +78,12 @@ async def get_workspace(db: AsyncSession, workspace_id: UUID, user) -> Workspace
                 StaffAssignment.workspace_id == workspace_id,
             )
         )
-        if assignment.scalar_one_or_none():
-            return workspace
+        if not assignment.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this workspace.",
+            )
+        return workspace
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,

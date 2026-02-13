@@ -70,11 +70,25 @@ async def create_lead(db: AsyncSession, workspace_id: UUID, data: LeadCreate) ->
 async def get_lead(
     db: AsyncSession, lead_id: UUID, workspace_id: UUID
 ) -> Optional[Lead]:
-    """Get a lead by ID"""
+    """Get a lead by ID, validated against workspace_id"""
     result = await db.execute(
         select(Lead).where(Lead.id == lead_id, Lead.workspace_id == workspace_id)
     )
-    return result.scalar_one_or_none()
+    lead = result.scalar_one_or_none()
+
+    if not lead:
+        first_check = await db.execute(select(Lead).where(Lead.id == lead_id))
+        exists = first_check.scalar_one_or_none()
+        if exists:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this lead",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Lead not found"
+        )
+
+    return lead
 
 
 async def list_leads(
@@ -144,15 +158,8 @@ async def update_lead(
     data: LeadUpdate,
     user_id: Optional[UUID] = None,
 ) -> Lead:
-    """Update a lead"""
-
+    """Update a lead - validates workspace access in get_lead"""
     lead = await get_lead(db, lead_id, workspace_id)
-
-    if not lead:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Lead not found"
-        )
-
     old_status = lead.status
 
     # Update fields
@@ -238,7 +245,8 @@ async def add_lead_activity(
 async def get_lead_activities(
     db: AsyncSession, lead_id: UUID, workspace_id: UUID
 ) -> List[LeadActivity]:
-    """Get all activities for a lead"""
+    """Get all activities for a lead - validates workspace access"""
+    await get_lead(db, lead_id, workspace_id)
 
     result = await db.execute(
         select(LeadActivity)
@@ -281,12 +289,8 @@ async def get_lead_stats(db: AsyncSession, workspace_id: UUID) -> dict:
 
 
 async def delete_lead(db: AsyncSession, lead_id: UUID, workspace_id: UUID) -> bool:
-    """Delete a lead"""
-
+    """Delete a lead - validates workspace access in get_lead"""
     lead = await get_lead(db, lead_id, workspace_id)
-
-    if not lead:
-        return False
 
     await db.delete(lead)
     await db.commit()

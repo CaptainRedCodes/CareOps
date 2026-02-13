@@ -185,21 +185,24 @@ async def list_public_services(
     db: AsyncSession = Depends(get_db),
 ):
     """List active booking types for public booking (no auth required)"""
-    # Validation moved to service layer - checking if workspace exists/active
     validation = await validate_workspace_for_booking(db, workspace_id)
     if not validation["is_valid"]:
-        # If workspace is invalid, return empty list rather than error to avoid enumeration attacks?
-        # Or just return empty list as in original code
-        return []
-        
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No booking services available",
+        )
+
     return await list_booking_types(db, workspace_id, active_only=True)
 
 
 @public_router.get("/services/{service_id}", response_model=BookingTypeOut)
-async def get_public_service(service_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_public_service(
+    service_id: UUID,
+    workspace_id: UUID = Query(None, description="Workspace ID"),
+    db: AsyncSession = Depends(get_db),
+):
     """Get a booking type for public booking (no auth required)"""
-    # Service layer handles 404
-    return await get_booking_type(db, service_id)
+    return await get_booking_type(db, service_id, workspace_id)
 
 
 @public_router.get(
@@ -208,11 +211,11 @@ async def get_public_service(service_id: UUID, db: AsyncSession = Depends(get_db
 async def get_slots(
     service_id: UUID,
     date: datetime = Query(..., description="Date to check availability (YYYY-MM-DD)"),
+    workspace_id: UUID = Query(None, description="Workspace ID"),
     db: AsyncSession = Depends(get_db),
 ):
     """Get available time slots for a booking type on a specific date (no auth required)"""
-    # Service layer handles logic
-    return await get_available_slots(db, service_id, date)
+    return await get_available_slots(db, service_id, date, workspace_id)
 
 
 @public_router.post(

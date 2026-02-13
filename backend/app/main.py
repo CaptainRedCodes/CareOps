@@ -19,6 +19,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from app.config import get_settings
+from app.core.errors import CareOpsException, careops_exception_handler
 from app.utils.logging import setup_logging, get_logger
 from app.routers import (
     auth,
@@ -92,6 +93,7 @@ app.add_middleware(
 )
 
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(CareOpsException, careops_exception_handler)
 
 # Register routers
 app.include_router(auth.router, prefix="/api/v1")

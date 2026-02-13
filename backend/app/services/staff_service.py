@@ -9,10 +9,7 @@ from app.models.user import User
 from app.schemas.staff import StaffPermissionsUpdate
 
 
-async def list_staff(
-    db: AsyncSession,
-    workspace_id: UUID
-) -> list[dict]:
+async def list_staff(db: AsyncSession, workspace_id: UUID) -> list[dict]:
     """List all staff members with their user info and permissions"""
     result = await db.execute(
         select(StaffAssignment, User)
@@ -24,39 +21,45 @@ async def list_staff(
 
     staff_list = []
     for assignment, user in rows:
-        staff_list.append({
-            "id": assignment.id,
-            "user_id": assignment.user_id,
-            "workspace_id": assignment.workspace_id,
-            "role": assignment.role,
-            "permissions": assignment.permissions,
-            "created_at": assignment.created_at,
-            "user_email": user.email,
-            "user_name": user.full_name,
-        })
+        staff_list.append(
+            {
+                "id": assignment.id,
+                "user_id": assignment.user_id,
+                "workspace_id": assignment.workspace_id,
+                "role": assignment.role,
+                "permissions": assignment.permissions,
+                "created_at": assignment.created_at,
+                "user_email": user.email,
+                "user_name": user.full_name,
+            }
+        )
 
     return staff_list
 
 
 async def update_staff_permissions(
-    db: AsyncSession,
-    staff_id: UUID,
-    workspace_id: UUID,
-    data: StaffPermissionsUpdate
+    db: AsyncSession, staff_id: UUID, workspace_id: UUID, data: StaffPermissionsUpdate
 ) -> StaffAssignment:
-    """Update staff member permissions"""
+    """Update staff member permissions - validates workspace access"""
     result = await db.execute(
         select(StaffAssignment).where(
-            StaffAssignment.id == staff_id,
-            StaffAssignment.workspace_id == workspace_id
+            StaffAssignment.id == staff_id, StaffAssignment.workspace_id == workspace_id
         )
     )
     assignment = result.scalar_one_or_none()
 
     if not assignment:
+        check_result = await db.execute(
+            select(StaffAssignment).where(StaffAssignment.id == staff_id)
+        )
+        exists = check_result.scalar_one_or_none()
+        if exists:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to modify this staff member",
+            )
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Staff assignment not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Staff assignment not found"
         )
 
     assignment.permissions = data.permissions.model_dump()
@@ -66,24 +69,27 @@ async def update_staff_permissions(
     return assignment
 
 
-async def remove_staff(
-    db: AsyncSession,
-    staff_id: UUID,
-    workspace_id: UUID
-):
+async def remove_staff(db: AsyncSession, staff_id: UUID, workspace_id: UUID):
     """Remove a staff member from workspace"""
     result = await db.execute(
         select(StaffAssignment).where(
-            StaffAssignment.id == staff_id,
-            StaffAssignment.workspace_id == workspace_id
+            StaffAssignment.id == staff_id, StaffAssignment.workspace_id == workspace_id
         )
     )
     assignment = result.scalar_one_or_none()
 
     if not assignment:
+        check_result = await db.execute(
+            select(StaffAssignment).where(StaffAssignment.id == staff_id)
+        )
+        exists = check_result.scalar_one_or_none()
+        if exists:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to remove this staff member",
+            )
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Staff assignment not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Staff assignment not found"
         )
 
     await db.delete(assignment)

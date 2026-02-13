@@ -116,7 +116,27 @@ async def send_forms_for_booking(
 async def list_submissions_for_booking(
     db: AsyncSession, booking_id: UUID, workspace_id: UUID
 ) -> list[FormSubmission]:
-    """List all form submissions for a booking"""
+    """List all form submissions for a booking - validates workspace access"""
+    from app.models.booking import Booking
+
+    booking_result = await db.execute(
+        select(Booking).where(
+            Booking.id == booking_id, Booking.workspace_id == workspace_id
+        )
+    )
+    if not booking_result.scalar_one_or_none():
+        check_booking = await db.execute(
+            select(Booking).where(Booking.id == booking_id)
+        )
+        if check_booking.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this booking",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found"
+        )
+
     result = await db.execute(
         select(FormSubmission)
         .join(WorkspaceForm)
@@ -135,7 +155,7 @@ async def update_submission(
     workspace_id: UUID,
     data: FormSubmissionUpdate,
 ) -> FormSubmission:
-    """Update a form submission (mark as completed, etc.)"""
+    """Update a form submission (mark as completed, etc.) - validates workspace access"""
     result = await db.execute(
         select(FormSubmission)
         .join(WorkspaceForm)
@@ -147,6 +167,15 @@ async def update_submission(
     submission = result.scalar_one_or_none()
 
     if not submission:
+        check_result = await db.execute(
+            select(FormSubmission).where(FormSubmission.id == submission_id)
+        )
+        exists = check_result.scalar_one_or_none()
+        if exists:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this form submission",
+            )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Form submission not found"
         )

@@ -1,15 +1,18 @@
 # app/routers/contacts.py
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from uuid import UUID
 from typing import List, Optional
 
 from app.database import get_db
 from app.dependencies import require_workspace_member
 from app.models.user import User
-from app.models.contact import Contact
 from app.schemas.contact import ContactOut, ContactUpdate
+from app.services.contact_service import (
+    list_contacts as svc_list_contacts,
+    get_contact as svc_get_contact,
+    update_contact as svc_update_contact,
+)
 
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/contacts", tags=["Contacts"])
@@ -23,15 +26,7 @@ async def list_contacts(
     user: User = Depends(require_workspace_member),
 ):
     """List all contacts for workspace (requires workspace membership)"""
-    query = select(Contact).where(Contact.workspace_id == workspace_id)
-
-    if status:
-        query = query.where(Contact.status == status)
-
-    query = query.order_by(Contact.created_at.desc())
-
-    result = await db.execute(query)
-    return result.scalars().all()
+    return await svc_list_contacts(db, workspace_id, status)
 
 
 @router.get("/{contact_id}", response_model=ContactOut)
@@ -42,19 +37,7 @@ async def get_contact(
     user: User = Depends(require_workspace_member),
 ):
     """Get a specific contact (requires workspace membership)"""
-    result = await db.execute(
-        select(Contact).where(
-            Contact.id == contact_id, Contact.workspace_id == workspace_id
-        )
-    )
-    contact = result.scalar_one_or_none()
-
-    if not contact:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found"
-        )
-
-    return contact
+    return await svc_get_contact(db, workspace_id, contact_id)
 
 
 @router.patch("/{contact_id}", response_model=ContactOut)
@@ -66,27 +49,4 @@ async def update_contact(
     user: User = Depends(require_workspace_member),
 ):
     """Update a contact (requires workspace membership)"""
-    result = await db.execute(
-        select(Contact).where(
-            Contact.id == contact_id, Contact.workspace_id == workspace_id
-        )
-    )
-    contact = result.scalar_one_or_none()
-
-    if not contact:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found"
-        )
-
-    # Update fields
-    for field, value in data.model_dump(exclude_unset=True).items():
-        if field == "form_data" and value:
-            import json
-
-            value = json.dumps(value)
-        setattr(contact, field, value)
-
-    await db.commit()
-    await db.refresh(contact)
-
-    return contact
+    return await svc_update_contact(db, workspace_id, contact_id, data)
