@@ -107,3 +107,30 @@ async def reopen_conv(
 ):
     """Reopen a closed conversation (requires inbox permission)"""
     return await reopen_conversation(db, conversation_id, workspace_id)
+
+
+@router.post("/{conversation_id}/messages/{message_id}/read")
+async def mark_message_read(
+    workspace_id: UUID,
+    conversation_id: UUID,
+    message_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("inbox")),
+):
+    """Mark a message as read (requires inbox permission)"""
+    from app.services.conversation_service import mark_message_as_read
+
+    return await mark_message_as_read(db, message_id, conversation_id, workspace_id)
+
+
+@router.post("/{conversation_id}/read-all")
+async def mark_all_messages_read(
+    workspace_id: UUID,
+    conversation_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("inbox")),
+):
+    """Mark all messages in a conversation as read (requires inbox permission)"""
+    from app.services.conversation_service import mark_all_messages_as_read
+
+    return await mark_all_messages_as_read(db, conversation_id, workspace_id)

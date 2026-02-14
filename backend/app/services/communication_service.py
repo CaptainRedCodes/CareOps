@@ -1,5 +1,7 @@
 from typing import Optional
 from uuid import UUID
+import asyncio
+import logging
 
 from app.utils.security import decrypt
 from sqlalchemy import select
@@ -11,24 +13,24 @@ from app.models.communication import CommunicationIntegration, CommunicationLog
 from app.services.email_providers import send_email_via_provider
 from app.services.sms_providers import send_sms_via_provider
 
+logger = logging.getLogger(__name__)
 
-async def send_communication(
+MAX_RETRIES = 3
+RETRY_DELAYS = [1, 2, 4]  # Exponential backoff delays in seconds
+
+
+async def _send_email_with_retry(
     db: AsyncSession,
     workspace_id: UUID,
-    channel: str,
     recipient: str,
-    subject: Optional[str],
+    subject: str,
     message: str,
-    sent_by_staff: bool = False,
-    automated: bool = False,
-):
-    """
-    Send communication via available channel.
-    For email: Uses Gmail integration if available, otherwise falls back to CommunicationIntegration.
-    """
+) -> tuple[str, Optional[str]]:
+    """Send email with retry logic"""
+    last_error = None
 
-    try:
-        if channel == "email":
+    for attempt in range(MAX_RETRIES):
+        try:
             # First, try to use Gmail integration
             from app.services.gmail_service import GmailService
 
@@ -42,29 +44,26 @@ async def send_communication(
                     to_email=recipient,
                     subject=subject or "",
                     body=message,
-                    html_body=message,  # Send as both plain and HTML
+                    html_body=message,
                 )
 
                 if message_id:
-                    status = "sent"
-                    error_message = None
+                    return "sent", None
                 else:
-                    status = "failed"
-                    error_message = "Failed to send via Gmail"
+                    last_error = "Failed to send via Gmail"
             else:
                 # Fall back to CommunicationIntegration
-                integration = (
-                    await db.execute(
-                        select(CommunicationIntegration).where(
-                            CommunicationIntegration.workspace_id == workspace_id,
-                            CommunicationIntegration.channel == channel,
-                            CommunicationIntegration.is_active == True,
-                        )
+                result = await db.execute(
+                    select(CommunicationIntegration).where(
+                        CommunicationIntegration.workspace_id == workspace_id,
+                        CommunicationIntegration.channel == "email",
+                        CommunicationIntegration.is_active == True,
                     )
-                ).scalar_one_or_none()
+                )
+                integration = result.scalar_one_or_none()
 
                 if not integration:
-                    raise RuntimeError(f"No active {channel} integration configured.")
+                    raise RuntimeError(f"No active email integration configured.")
 
                 config = decrypt(integration.config)
 
@@ -76,22 +75,41 @@ async def send_communication(
                     html_body=message,
                 )
 
-                status = "sent"
-                error_message = None
+                return "sent", None
 
-        elif channel == "sms":
+        except Exception as e:
+            last_error = str(e)
+            logger.warning(f"Email send attempt {attempt + 1} failed: {last_error}")
+
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(RETRY_DELAYS[attempt])
+
+    return "failed", last_error
+
+
+async def _send_sms_with_retry(
+    db: AsyncSession,
+    workspace_id: UUID,
+    recipient: str,
+    message: str,
+) -> tuple[str, Optional[str]]:
+    """Send SMS with retry logic"""
+    last_error = None
+
+    for attempt in range(MAX_RETRIES):
+        try:
             integration = (
                 await db.execute(
                     select(CommunicationIntegration).where(
                         CommunicationIntegration.workspace_id == workspace_id,
-                        CommunicationIntegration.channel == channel,
+                        CommunicationIntegration.channel == "sms",
                         CommunicationIntegration.is_active == True,
                     )
                 )
             ).scalar_one_or_none()
 
             if not integration:
-                raise RuntimeError(f"No active {channel} integration configured.")
+                raise RuntimeError(f"No active SMS integration configured.")
 
             config = decrypt(integration.config)
 
@@ -102,17 +120,44 @@ async def send_communication(
                 body=message,
             )
 
-            status = "sent"
-            error_message = None
-        else:
-            raise ValueError("Unsupported communication channel.")
+            return "sent", None
 
-        status = "sent"
-        error_message = None
+        except Exception as e:
+            last_error = str(e)
+            logger.warning(f"SMS send attempt {attempt + 1} failed: {last_error}")
 
-    except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(RETRY_DELAYS[attempt])
+
+    return "failed", last_error
+
+
+async def send_communication(
+    db: AsyncSession,
+    workspace_id: UUID,
+    channel: str,
+    recipient: str,
+    subject: Optional[str],
+    message: str,
+    sent_by_staff: bool = False,
+    automated: bool = False,
+):
+    """
+    Send communication via available channel with retry logic.
+    For email: Uses Gmail integration if available, otherwise falls back to CommunicationIntegration.
+    """
+
+    if channel == "email":
+        status, error_message = await _send_email_with_retry(
+            db, workspace_id, recipient, subject or "", message
+        )
+    elif channel == "sms":
+        status, error_message = await _send_sms_with_retry(
+            db, workspace_id, recipient, message
+        )
+    else:
         status = "failed"
-        error_message = str(e)
+        error_message = "Unsupported communication channel."
 
     # Log the message
     log = CommunicationLog(

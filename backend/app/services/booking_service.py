@@ -474,7 +474,19 @@ async def create_booking(db: AsyncSession, data: BookingCreate) -> dict:
             )
             db.add(conversation)
 
-    # 7. COMMIT - This finalizes the transaction
+    # 7. Send forms automatically if linked to booking type
+    if booking_type.linked_form_ids and len(booking_type.linked_form_ids) > 0:
+        from app.services.workspace_form_service import send_forms_for_booking
+
+        await send_forms_for_booking(
+            db=db,
+            workspace_id=workspace_id,
+            booking_id=booking.id,
+            contact_id=contact.id,
+            form_ids=booking_type.linked_form_ids or [],
+        )
+
+    # 8. COMMIT - This finalizes the transaction
     await db.commit()
     await db.refresh(booking)
 
@@ -499,17 +511,22 @@ async def create_booking(db: AsyncSession, data: BookingCreate) -> dict:
 
         from app.services.event_service import emit_booking_created
 
+        booking_date = booking.start_time.strftime("%B %d, %Y")
+        booking_time = booking.start_time.strftime("%I:%M %p")
+
         await emit_booking_created(
             db=db,
             workspace_id=workspace_id,
             booking_id=booking.id,
             booking_data={
-                "booking_type_name": booking_type.name,
+                "service_name": booking_type.name,
                 "booking_type_id": str(booking_type.id),
                 "linked_form_ids": booking_type.linked_form_ids or [],
                 "inventory_requirements": booking_type.inventory_requirements or [],
                 "start_time": booking.start_time.isoformat(),
                 "end_time": booking.end_time.isoformat(),
+                "booking_date": booking_date,
+                "booking_time": booking_time,
                 "contact_name": contact.name,
                 "contact_email": contact.email,
                 "contact_phone": contact.phone,
@@ -519,6 +536,31 @@ async def create_booking(db: AsyncSession, data: BookingCreate) -> dict:
     except Exception as e:
         logger.error(f"Failed to emit events for booking {booking.id}: {str(e)}")
         # Don't raise, transaction is already committed
+
+    # 9. Reserve inventory for this booking
+    try:
+        await _reserve_inventory_for_booking(
+            db=db,
+            workspace_id=workspace_id,
+            booking_id=booking.id,
+            inventory_requirements=booking_type.inventory_requirements or [],
+        )
+    except Exception as e:
+        logger.error(f"Failed to reserve inventory for booking {booking.id}: {str(e)}")
+        # Don't raise, booking is already confirmed
+
+    # 10. Create Google Calendar event if connected
+    try:
+        await _sync_booking_to_calendar(
+            db=db,
+            workspace_id=workspace_id,
+            booking=booking,
+            booking_type=booking_type,
+            contact=contact,
+        )
+    except Exception as e:
+        logger.error(f"Failed to sync booking {booking.id} to calendar: {str(e)}")
+        # Don't raise, booking is already confirmed
 
     return {
         "success": True,
@@ -541,7 +583,16 @@ async def list_bookings(
     end_date: datetime = None,
 ) -> list[Booking]:
     """List bookings with optional filters"""
-    query = select(Booking).where(Booking.workspace_id == workspace_id)
+    query = (
+        select(Booking)
+        .where(Booking.workspace_id == workspace_id)
+        .options(
+            selectinload(Booking.booking_type).selectinload(
+                BookingType.availability_rules
+            ),
+            selectinload(Booking.contact),
+        )
+    )
 
     if status:
         query = query.where(Booking.status == status)
@@ -638,6 +689,120 @@ async def update_booking_status(
     await db.refresh(booking)
 
     return booking
+
+
+async def _reserve_inventory_for_booking(
+    db: AsyncSession,
+    workspace_id: UUID,
+    booking_id: UUID,
+    inventory_requirements: list,
+) -> None:
+    """Reserve inventory for a booking based on booking type requirements"""
+    if not inventory_requirements:
+        return
+
+    from sqlalchemy import select
+    from app.models.inventory import InventoryItem
+    from app.schemas.inventory import InventoryUsageCreate
+    from app.services.inventory_service import record_usage
+
+    for req in inventory_requirements:
+        item_id = req.get("item_id")
+        quantity = req.get("quantity", 1)
+
+        if not item_id:
+            continue
+
+        # Check if inventory item exists and has enough stock
+        result = await db.execute(
+            select(InventoryItem).where(
+                InventoryItem.id == item_id,
+                InventoryItem.workspace_id == workspace_id,
+                InventoryItem.is_active == True,
+            )
+        )
+        item = result.scalar_one_or_none()
+
+        if not item:
+            logger.warning(
+                f"Inventory item {item_id} not found for booking {booking_id}"
+            )
+            continue
+
+        if item.quantity < quantity:
+            logger.warning(
+                f"Insufficient stock for item {item.name}. Available: {item.quantity}, Required: {quantity}"
+            )
+            # Don't fail the booking, just log a warning
+            continue
+
+        # Reserve the inventory
+        try:
+            usage_data = InventoryUsageCreate(
+                item_id=item_id,
+                booking_id=booking_id,
+                quantity_used=quantity,
+                notes=f"Reserved for booking {booking_id}",
+            )
+            await record_usage(db, workspace_id, usage_data)
+            logger.info(
+                f"Reserved {quantity} {item.unit} of {item.name} for booking {booking_id}"
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to reserve inventory for booking {booking_id}: {str(e)}"
+            )
+
+
+async def _sync_booking_to_calendar(
+    db: AsyncSession,
+    workspace_id: UUID,
+    booking,
+    booking_type,
+    contact,
+) -> None:
+    """Sync booking to Google Calendar if connected"""
+    from sqlalchemy import select
+    from app.models.calendar_integration import CalendarIntegration
+    from app.services.calendar_service import CalendarService
+
+    # Check if calendar is connected
+    result = await db.execute(
+        select(CalendarIntegration).where(
+            CalendarIntegration.workspace_id == workspace_id,
+            CalendarIntegration.is_active == True,
+        )
+    )
+    calendar_integration = result.scalar_one_or_none()
+
+    if not calendar_integration:
+        return  # No calendar connected, skip
+
+    # Create calendar event
+    calendar_service = CalendarService(db)
+
+    event_title = f"{booking_type.name} - {contact.name}"
+    event_description = f"Booking for {contact.name}"
+    if contact.email:
+        event_description += f"\nEmail: {contact.email}"
+    if contact.phone:
+        event_description += f"\nPhone: {contact.phone}"
+    if booking.customer_notes:
+        event_description += f"\n\nNotes: {booking.customer_notes}"
+
+    location = ""
+    if booking_type.location_type == "in_person" and booking_type.location_details:
+        location = booking_type.location_details
+
+    await calendar_service.create_calendar_event(
+        integration=calendar_integration,
+        booking_id=booking.id,
+        title=event_title,
+        start_time=booking.start_time,
+        end_time=booking.end_time,
+        description=event_description,
+        location=location,
+    )
 
 
 # Backward compatibility

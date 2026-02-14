@@ -2,7 +2,19 @@
 from pydantic import BaseModel, Field
 from uuid import UUID
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
+
+
+VALID_EVENT_TYPES = Literal[
+    "contact.created",
+    "booking.created",
+    "form.completed",
+    "inventory.updated",
+    "inventory.low",
+    "staff.replied",
+]
+
+VALID_ACTION_TYPES = Literal["send_email", "send_sms"]
 
 
 class AutomationRuleCreate(BaseModel):
@@ -10,12 +22,9 @@ class AutomationRuleCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    event_type: str = Field(
-        ...,
-        pattern="^(contact.created|booking.created|booking.reminder|form.pending|inventory.low)$",
-    )
+    event_type: VALID_EVENT_TYPES
     priority: int = Field(default=0)
-    action_type: str = Field(..., pattern="^(send_email|send_sms)$")
+    action_type: VALID_ACTION_TYPES
     action_config: Dict[str, Any] = Field(default_factory=dict)
     conditions: Optional[Dict[str, Any]] = None
     stop_on_reply: bool = Field(default=False)
@@ -26,10 +35,10 @@ class AutomationRuleUpdate(BaseModel):
 
     name: Optional[str] = None
     description: Optional[str] = None
-    event_type: Optional[str] = None
+    event_type: Optional[VALID_EVENT_TYPES] = None
     priority: Optional[int] = None
     is_active: Optional[bool] = None
-    action_type: Optional[str] = None
+    action_type: Optional[VALID_ACTION_TYPES] = None
     action_config: Optional[Dict[str, Any]] = None
     conditions: Optional[Dict[str, Any]] = None
     stop_on_reply: Optional[bool] = None
@@ -81,9 +90,10 @@ class AutomationLogOut(BaseModel):
 class EventType:
     CONTACT_CREATED = "contact.created"
     BOOKING_CREATED = "booking.created"
-    BOOKING_REMINDER = "booking.reminder"
-    FORM_PENDING = "form.pending"
+    FORM_COMPLETED = "form.completed"
+    INVENTORY_UPDATED = "inventory.updated"
     INVENTORY_LOW = "inventory.low"
+    STAFF_REPLIED = "staff.replied"
 
 
 # Action types enum

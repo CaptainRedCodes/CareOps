@@ -79,7 +79,9 @@ api.interceptors.response.use(
                 });
 
                 localStorage.setItem("access_token", data.access_token);
-                localStorage.setItem("refresh_token", data.refresh_token);
+                if (data.refresh_token) {
+                    localStorage.setItem("refresh_token", data.refresh_token);
+                }
 
                 processQueue(null, data.access_token);
                 original.headers.Authorization = `Bearer ${data.access_token}`;

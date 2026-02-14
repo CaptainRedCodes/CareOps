@@ -4,6 +4,8 @@ from uuid import UUID
 from datetime import datetime, time
 from typing import Optional, List
 
+from app.schemas.contact import ContactOut
+
 
 class AvailabilityRuleCreate(BaseModel):
     """Create availability rule"""
@@ -158,7 +160,7 @@ class BookingOut(BaseModel):
 
     # Nested data
     booking_type: Optional[BookingTypeOut] = None
-    contact: Optional[dict] = None
+    contact: Optional[ContactOut] = None
 
     class Config:
         from_attributes = True

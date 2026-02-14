@@ -34,9 +34,10 @@ interface AutomationRule {
 const EVENT_OPTIONS = [
   { value: 'contact.created', label: 'New Contact', description: 'When a new contact is added' },
   { value: 'booking.created', label: 'Booking Created', description: 'When a booking is made' },
-  { value: 'booking.reminder', label: 'Booking Reminder', description: 'Before a booking starts' },
-  { value: 'form.pending', label: 'Form Pending', description: 'When a form is awaiting completion' },
+  { value: 'form.completed', label: 'Form Completed', description: 'When a form is completed' },
+  { value: 'inventory.updated', label: 'Inventory Updated', description: 'When inventory is updated' },
   { value: 'inventory.low', label: 'Inventory Low', description: 'When stock falls below threshold' },
+  { value: 'staff.replied', label: 'Staff Replied', description: 'When staff replies to a contact' },
 ];
 
 const ACTION_OPTIONS = [

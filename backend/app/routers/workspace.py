@@ -11,9 +11,6 @@ from app.schemas.communication import (
     VerificationResponse,
 )
 from app.models.communication import CommunicationIntegration, CommunicationLog
-from app.services.communication_service import send_communication
-from app.schemas.conversation import MessageCreate, MessageOut
-from app.services.conversation_service import send_staff_reply
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -155,26 +152,6 @@ async def delete_integration(
 ):
     """Delete a communication integration (admin only)."""
     await remove_integration(db, workspace_id, integration_id, admin)
-
-
-@router.post("/{conversation_id}/reply", response_model=MessageOut)
-async def reply_to_conversation(
-    workspace_id: UUID,
-    conversation_id: UUID,
-    data: MessageCreate,  # Should include: channel, content
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """
-    Send staff reply via email OR SMS
-
-    The service layer:
-    1. Validates contact has this channel
-    2. Calls appropriate integration (email/SMS)
-    3. Logs message in conversation
-    4. Pauses automation
-    """
-    return await send_staff_reply(db, conversation_id, workspace_id, data, user.id)
 
 
 @router.get(

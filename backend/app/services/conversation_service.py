@@ -35,7 +35,7 @@ async def get_conversation(
 async def get_conversation_messages(
     db: AsyncSession, conversation_id: UUID, workspace_id: UUID
 ) -> list[Message]:
-    """Get all messages in a conversation"""
+    """Get all messages in a conversation and mark inbound messages as read"""
     # First verify conversation exists and belongs to workspace
     await get_conversation(db, conversation_id, workspace_id)
 
@@ -45,7 +45,17 @@ async def get_conversation_messages(
         .order_by(Message.created_at.asc())
     )
 
-    return result.scalars().all()
+    messages = result.scalars().all()
+
+    # Mark all unread inbound messages as read
+    for message in messages:
+        if message.direction == "inbound" and not message.is_read:
+            message.is_read = True
+
+    if messages:
+        await db.commit()
+
+    return messages
 
 
 async def send_staff_reply(
@@ -193,6 +203,16 @@ async def list_conversations(
         )
         last_message = last_msg_result.scalar_one_or_none()
 
+        # Get unread count
+        unread_result = await db.execute(
+            select(func.count(Message.id)).where(
+                Message.conversation_id == conversation.id,
+                Message.direction == "inbound",
+                Message.is_read == False,
+            )
+        )
+        unread_count = unread_result.scalar() or 0
+
         conversations_data.append(
             {
                 "conversation_id": conversation.id,
@@ -207,7 +227,7 @@ async def list_conversations(
                 "last_message_preview": last_message.body[:100]
                 if last_message
                 else None,
-                "unread_count": 0,  # TODO: Implement read tracking
+                "unread_count": unread_count,
             }
         )
 
@@ -240,3 +260,56 @@ async def reopen_conversation(
     await db.refresh(conversation)
 
     return conversation
+
+
+async def mark_message_as_read(
+    db: AsyncSession, message_id: UUID, conversation_id: UUID, workspace_id: UUID
+) -> Message:
+    """Mark a single message as read"""
+    # Verify conversation belongs to workspace
+    await get_conversation(db, conversation_id, workspace_id)
+
+    result = await db.execute(
+        select(Message).where(
+            Message.id == message_id,
+            Message.conversation_id == conversation_id,
+        )
+    )
+    message = result.scalar_one_or_none()
+
+    if not message:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Message not found"
+        )
+
+    message.is_read = True
+    await db.commit()
+    await db.refresh(message)
+
+    return message
+
+
+async def mark_all_messages_as_read(
+    db: AsyncSession, conversation_id: UUID, workspace_id: UUID
+) -> dict:
+    """Mark all inbound messages in a conversation as read"""
+    # Verify conversation belongs to workspace
+    await get_conversation(db, conversation_id, workspace_id)
+
+    result = await db.execute(
+        select(Message).where(
+            Message.conversation_id == conversation_id,
+            Message.direction == "inbound",
+            Message.is_read == False,
+        )
+    )
+    messages = result.scalars().all()
+
+    count = 0
+    for message in messages:
+        message.is_read = True
+        count += 1
+
+    await db.commit()
+
+    return {"marked_read": count}

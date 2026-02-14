@@ -83,7 +83,6 @@ async def dispatch_event(db: AsyncSession, event: EventLog) -> None:
 
     if not handlers:
         logger.debug(f"No handlers registered for {event.event_type.value}")
-        return
 
     logger.info(f"Dispatching {event.event_type.value} to {len(handlers)} handler(s)")
 
@@ -98,6 +97,8 @@ async def dispatch_event(db: AsyncSession, event: EventLog) -> None:
             event.error_message = str(e)
 
         await db.flush()
+
+    await _trigger_automation_rules(db, event)
 
 
 async def process_event(
@@ -230,3 +231,29 @@ async def emit_staff_replied(
         entity_id=conversation_id,
         event_data=reply_data,
     )
+
+
+async def _trigger_automation_rules(db: AsyncSession, event: EventLog) -> None:
+    """
+    Trigger automation rules from the automation tab for this event.
+    All automation now happens through user-defined rules in the automation tab.
+    """
+    try:
+        from app.services.automation_service import trigger_automation
+
+        trigger_data = {
+            "contact_id": str(event.entity_id)
+            if event.entity_type == "contact"
+            else None,
+            "event_type": event.event_type.value,
+            **event.event_data,
+        }
+
+        await trigger_automation(
+            db=db,
+            workspace_id=event.workspace_id,
+            event_type=event.event_type.value,
+            trigger_data=trigger_data,
+        )
+    except Exception as e:
+        logger.error(f"Failed to trigger automation rules: {e}")

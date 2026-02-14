@@ -168,29 +168,12 @@ export default function IntegrationsModal({ workspaceId, isOpen, onClose }: Prop
 
     if (channel === "sms") {
       return (
-        <div className="space-y-2">
-          <Input
-            placeholder="Twilio Account SID"
-            value={config.account_sid || ""}
-            onChange={(e) =>
-              setConfig({ ...config, account_sid: e.target.value })
-            }
-          />
-          <Input
-            placeholder="Twilio Auth Token"
-            type="password"
-            value={config.auth_token || ""}
-            onChange={(e) =>
-              setConfig({ ...config, auth_token: e.target.value })
-            }
-          />
-          <Input
-            placeholder="Twilio From Number (e.g., +1415XXXXXXX)"
-            value={config.from_number || ""}
-            onChange={(e) =>
-              setConfig({ ...config, from_number: e.target.value })
-            }
-          />
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-center">
+          <MessageSquare className="h-8 w-8 text-amber-500 mx-auto mb-2" />
+          <p className="text-sm font-medium text-amber-800">SMS Coming Soon</p>
+          <p className="text-xs text-amber-600 mt-1">
+            We're working on SMS integration. Stay tuned for updates!
+          </p>
         </div>
       );
     }
@@ -347,7 +330,7 @@ export default function IntegrationsModal({ workspaceId, isOpen, onClose }: Prop
               className="h-9 rounded-md border bg-background px-3 text-sm"
             >
               <option value="email">Email</option>
-              <option value="sms">SMS</option>
+              <option value="sms" disabled>SMS (Coming Soon)</option>
             </select>
 
             <select
@@ -364,10 +347,10 @@ export default function IntegrationsModal({ workspaceId, isOpen, onClose }: Prop
 
           <Button
             onClick={handleAddIntegration}
-            disabled={adding}
-            className="w-full bg-brand text-white hover:bg-brand-hover"
+            disabled={adding || channel === "sms"}
+            className="w-full bg-brand text-white hover:bg-brand-hover disabled:opacity-50"
           >
-            {adding ? "Connecting…" : "Connect Channel"}
+            {adding ? "Connecting…" : channel === "sms" ? "SMS Coming Soon" : "Connect Channel"}
           </Button>
         </div>
       </DialogContent>

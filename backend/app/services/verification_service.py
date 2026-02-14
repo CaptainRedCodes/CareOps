@@ -39,6 +39,77 @@ async def verify_email_integration(
 
     config = decrypt(integration.config)
 
+    # Check if using Gmail OAuth
+    if integration.provider == "gmail" and config.get("connected_via") == "gmail":
+        from app.services.gmail_service import GmailService
+
+        gmail_service = GmailService(db)
+        gmail_integration = await gmail_service.get_integration(workspace_id)
+
+        if not gmail_integration or not gmail_integration.is_active:
+            return {
+                "success": False,
+                "message": "Gmail integration not active",
+                "channel": "email",
+            }
+
+        try:
+            message_id = await gmail_service.send_email(
+                integration=gmail_integration,
+                to_email=test_email,
+                subject="Test Email from CareOps",
+                body="Your email integration is working correctly. This is a test message from CareOps.",
+                html_body=f"""
+                <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; border: 1px solid #e5e5e5; border-radius: 8px;">
+                    <div style="text-align: center; margin-bottom: 24px;">
+                        <span style="background: #d4a04a; color: #09090b; padding: 6px 12px; border-radius: 8px; font-weight: bold;">CareOps</span>
+                    </div>
+                    <h2 style="color: #333; text-align: center;">Test Email Successful!</h2>
+                    <p style="color: #666; text-align: center;">
+                        Your email integration is working correctly. This is a test message from CareOps.
+                    </p>
+                    <p style="color: #999; font-size: 12px; text-align: center; margin-top: 24px;">
+                        If you received this email, your email configuration is valid.
+                    </p>
+                </div>
+                """,
+            )
+
+            if message_id:
+                log = CommunicationLog(
+                    workspace_id=workspace_id,
+                    channel="email",
+                    recipient=test_email,
+                    subject="Test Email from CareOps",
+                    message="Gmail integration test - SUCCESS",
+                    sent_by_staff=False,
+                    automated=True,
+                    status="sent",
+                )
+                db.add(log)
+                await db.commit()
+
+                return {
+                    "success": True,
+                    "message": f"Test email sent successfully to {test_email}",
+                    "channel": "email",
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "Failed to send test email via Gmail",
+                    "channel": "email",
+                }
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Gmail verification failed: {error_msg}")
+            return {
+                "success": False,
+                "message": f"Failed to send test email: {error_msg}",
+                "channel": "email",
+            }
+
+    # Fall back to SMTP config
     try:
         import aiosmtplib
         from email.mime.text import MIMEText

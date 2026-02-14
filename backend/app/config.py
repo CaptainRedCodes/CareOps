@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,14 +7,16 @@ class Settings(BaseSettings):
     """Central configuration — all values sourced from a single .env file in the main folder."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",          
+        env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
     )
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:Rahulv29@localhost:5432/careops_db"
+    DATABASE_URL: str = (
+        "postgresql+asyncpg://postgres:Rahulv29@localhost:5432/careops_db"
+    )
 
     # Auth
     SECRET_KEY: str
@@ -22,6 +24,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     FRONTEND_URL: str
+
+    # CORS
+    CORS_ORIGINS: str = "*"  # Comma-separated list of allowed origins
 
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None

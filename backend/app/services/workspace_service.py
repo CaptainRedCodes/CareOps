@@ -3,9 +3,11 @@ from uuid import UUID
 from app.models.staff import StaffAssignment
 from app.models.user import User, UserRole
 from app.models.communication import CommunicationIntegration
+from app.models.workspace_form import FormSubmission
+from app.models.booking import Booking
 from app.utils.security import encrypt
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.workspace import Workspace, WorkingHours
@@ -29,7 +31,7 @@ async def create_workspace(
     return workspace
 
 
-async def list_workspaces(db: AsyncSession, user) -> list[Workspace]:
+async def list_workspaces(db: AsyncSession, user) -> list[dict]:
     """Return workspaces visible to the given user."""
 
     if user.role == UserRole.ADMIN:
@@ -38,21 +40,58 @@ async def list_workspaces(db: AsyncSession, user) -> list[Workspace]:
             .where(Workspace.owner_id == user.id)
             .order_by(Workspace.created_at.desc())
         )
-        return result.scalars().all()
+        workspaces = result.scalars().all()
 
-    if user.role == UserRole.STAFF:
+    elif user.role == UserRole.STAFF:
         result = await db.execute(
             select(Workspace)
             .join(StaffAssignment, StaffAssignment.workspace_id == Workspace.id)
             .where(StaffAssignment.user_id == user.id)
             .order_by(Workspace.created_at.desc())
         )
-        return result.scalars().all()
+        workspaces = result.scalars().all()
+    else:
+        return []
 
-    return []
+    workspace_data = []
+    for workspace in workspaces:
+        pending_count = await db.execute(
+            select(func.count(FormSubmission.id))
+            .join(Booking, FormSubmission.booking_id == Booking.id)
+            .where(
+                Booking.workspace_id == workspace.id,
+                FormSubmission.status == "pending",
+            )
+        )
+        pending_forms = pending_count.scalar() or 0
+
+        staff_count = await db.execute(
+            select(func.count(StaffAssignment.id)).where(
+                StaffAssignment.workspace_id == workspace.id
+            )
+        )
+        staff_count_val = staff_count.scalar() or 0
+
+        workspace_data.append(
+            {
+                "id": workspace.id,
+                "owner_id": workspace.owner_id,
+                "business_name": workspace.business_name,
+                "address": workspace.address,
+                "timezone": workspace.timezone,
+                "contact_email": workspace.contact_email,
+                "is_activated": workspace.is_activated,
+                "created_at": workspace.created_at,
+                "updated_at": workspace.updated_at,
+                "pending_forms": pending_forms,
+                "staff_count": staff_count_val,
+            }
+        )
+
+    return workspace_data
 
 
-async def get_workspace(db: AsyncSession, workspace_id: UUID, user) -> Workspace:
+async def get_workspace(db: AsyncSession, workspace_id: UUID, user) -> dict:
     """Return a single workspace by ID if user has access."""
     result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
     workspace = result.scalars().first()
@@ -69,7 +108,6 @@ async def get_workspace(db: AsyncSession, workspace_id: UUID, user) -> Workspace
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have access to this workspace.",
             )
-        return workspace
 
     if user.role == UserRole.STAFF:
         assignment = await db.execute(
@@ -83,12 +121,37 @@ async def get_workspace(db: AsyncSession, workspace_id: UUID, user) -> Workspace
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have access to this workspace.",
             )
-        return workspace
 
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="You do not have access to this workspace.",
+    pending_count = await db.execute(
+        select(func.count(FormSubmission.id))
+        .join(Booking, FormSubmission.booking_id == Booking.id)
+        .where(
+            Booking.workspace_id == workspace.id,
+            FormSubmission.status == "pending",
+        )
     )
+    pending_forms = pending_count.scalar() or 0
+
+    staff_count = await db.execute(
+        select(func.count(StaffAssignment.id)).where(
+            StaffAssignment.workspace_id == workspace.id
+        )
+    )
+    staff_count_val = staff_count.scalar() or 0
+
+    return {
+        "id": workspace.id,
+        "owner_id": workspace.owner_id,
+        "business_name": workspace.business_name,
+        "address": workspace.address,
+        "timezone": workspace.timezone,
+        "contact_email": workspace.contact_email,
+        "is_activated": workspace.is_activated,
+        "created_at": workspace.created_at,
+        "updated_at": workspace.updated_at,
+        "pending_forms": pending_forms,
+        "staff_count": staff_count_val,
+    }
 
 
 async def create_integration(
@@ -284,9 +347,104 @@ async def activate_workspace(
         )
 
     workspace.is_activated = True
+
+    # Create default automation rules
+    await _create_default_automation_rules(db, workspace_id)
+
     await db.commit()
     await db.refresh(workspace)
     return workspace
+
+
+async def _create_default_automation_rules(
+    db: AsyncSession,
+    workspace_id: UUID,
+) -> None:
+    """Create default automation rules for a newly activated workspace"""
+    from app.models.automation import AutomationRule
+
+    default_rules = [
+        {
+            "name": "Welcome New Contact",
+            "description": "Send welcome message to new contacts",
+            "event_type": "contact.created",
+            "priority": 1,
+            "action_type": "send_email",
+            "action_config": {
+                "subject": "Welcome to Our Service",
+                "message": "Hi {{name}},\n\nThank you for reaching out to us! We appreciate your interest in our services.\n\nOur team will get back to you shortly.\n\nBest regards",
+            },
+            "conditions": {"is_new_contact": True},
+            "stop_on_reply": True,
+        },
+        {
+            "name": "Booking Confirmation",
+            "description": "Send confirmation when a booking is created",
+            "event_type": "booking.created",
+            "priority": 1,
+            "action_type": "send_email",
+            "action_config": {
+                "subject": "Booking Confirmed - {{service}}",
+                "message": "Hi {{name}},\n\nYour booking has been confirmed!\n\nService: {{service}}\nDate: {{date}}\nTime: {{time}}\n\nWe look forward to seeing you!\n\nBest regards",
+            },
+            "conditions": None,
+            "stop_on_reply": True,
+        },
+        {
+            "name": "Forms Sent",
+            "description": "Notify customer when forms are sent",
+            "event_type": "booking.created",
+            "priority": 2,
+            "action_type": "send_email",
+            "action_config": {
+                "subject": "Please complete your forms",
+                "message": "Hi {{name}},\n\nThank you for booking {{service}} on {{date}} at {{time}}.\n\nPlease complete the required forms before your appointment.\n\nIf you have any questions, please contact us.\n\nBest regards",
+            },
+            "conditions": None,
+            "stop_on_reply": True,
+        },
+        {
+            "name": "Booking Reminder",
+            "description": "Send reminder before booking date",
+            "event_type": "booking.reminder",
+            "priority": 3,
+            "action_type": "send_email",
+            "action_config": {
+                "subject": "Reminder: Your upcoming appointment",
+                "message": "Hi {{name}},\n\nThis is a friendly reminder about your upcoming appointment.\n\nService: {{service}}\nDate: {{date}}\nTime: {{time}}\n\nPlease let us know if you need to reschedule.\n\nBest regards",
+            },
+            "conditions": None,
+            "stop_on_reply": True,
+        },
+        {
+            "name": "Form Completion Confirmation",
+            "description": "Confirm form completion to customer",
+            "event_type": "form.completed",
+            "priority": 1,
+            "action_type": "send_email",
+            "action_config": {
+                "subject": "Forms Received - Thank you!",
+                "message": "Hi {{name}},\n\nWe have received your completed forms. Thank you!\n\nYour booking is now confirmed and ready.\n\nSee you soon!\n\nBest regards",
+            },
+            "conditions": None,
+            "stop_on_reply": False,
+        },
+    ]
+
+    for rule_data in default_rules:
+        rule = AutomationRule(
+            workspace_id=workspace_id,
+            name=rule_data["name"],
+            description=rule_data["description"],
+            event_type=rule_data["event_type"],
+            priority=rule_data["priority"],
+            action_type=rule_data["action_type"],
+            action_config=rule_data["action_config"],
+            conditions=rule_data["conditions"],
+            stop_on_reply=rule_data["stop_on_reply"],
+            is_active=True,
+        )
+        db.add(rule)
 
 
 async def get_working_hours(

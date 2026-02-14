@@ -26,12 +26,12 @@ interface ThirdPartyForm {
 }
 
 const FORM_PROVIDERS = [
-  { id: 'typeform', name: 'Typeform', logo: '📝', description: 'Create beautiful forms and surveys' },
-  { id: 'jotform', name: 'JotForm', logo: '📋', description: 'Build forms with a drag-and-drop builder' },
-  { id: 'google', name: 'Google Forms', logo: '📄', description: 'Simple forms integrated with Google' },
-  { id: 'hubspot', name: 'HubSpot Forms', logo: '🧡', description: 'Marketing automation forms' },
-  { id: 'calendly', name: 'Calendly', logo: '📅', description: 'Scheduling forms and meetings' },
-  { id: 'custom', name: 'Custom / Other', logo: '⚙️', description: 'Any other form provider' },
+  { id: 'typeform', name: 'Typeform', logo: '📝', description: 'Create beautiful forms and surveys', coming_soon: true },
+  { id: 'jotform', name: 'JotForm', logo: '📋', description: 'Build forms with a drag-and-drop builder', coming_soon: true },
+  { id: 'google', name: 'Google Forms', logo: '📄', description: 'Simple forms integrated with Google', coming_soon: true },
+  { id: 'hubspot', name: 'HubSpot Forms', logo: '🧡', description: 'Marketing automation forms', coming_soon: true },
+  { id: 'calendly', name: 'Calendly', logo: '📅', description: 'Scheduling forms and meetings', coming_soon: true },
+  { id: 'custom', name: 'Custom / Other', logo: '⚙️', description: 'Any other form provider', coming_soon: false },
 ];
 
 export default function ThirdPartyForms() {
@@ -114,12 +114,24 @@ export default function ThirdPartyForms() {
             {FORM_PROVIDERS.map((provider) => (
               <button
                 key={provider.id}
-                onClick={() => setSelectedProvider(provider.id)}
-                className={`p-4 border rounded-xl text-left hover:border-brand/50 transition-colors ${
-                  selectedProvider === provider.id ? 'border-brand bg-brand/5' : 'border-border'
+                onClick={() => !provider.coming_soon && setSelectedProvider(provider.id)}
+                disabled={provider.coming_soon}
+                className={`p-4 border rounded-xl text-left transition-colors ${
+                  provider.coming_soon 
+                    ? 'border-border bg-secondary/30 opacity-60 cursor-not-allowed'
+                    : selectedProvider === provider.id 
+                      ? 'border-brand bg-brand/5' 
+                      : 'border-border hover:border-brand/50'
                 }`}
               >
-                <div className="text-2xl mb-2">{provider.logo}</div>
+                <div className="flex items-start justify-between mb-2">
+                  <div className="text-2xl">{provider.logo}</div>
+                  {provider.coming_soon && (
+                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                      Coming Soon
+                    </span>
+                  )}
+                </div>
                 <h3 className="font-medium">{provider.name}</h3>
                 <p className="text-sm text-muted-foreground">{provider.description}</p>
               </button>
@@ -128,7 +140,7 @@ export default function ThirdPartyForms() {
         </div>
 
         {/* Integration Guide */}
-        {selectedProvider && (
+        {selectedProvider && !FORM_PROVIDERS.find(p => p.id === selectedProvider)?.coming_soon && (
           <div className="bg-card border border-border rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-lg">

@@ -36,7 +36,6 @@ import Staff from "@/pages/workspace/Staff";
 import Profile from "@/pages/workspace/Profile";
 import WorkingHours from "@/pages/workspace/WorkingHours";
 import Leads from "@/pages/workspace/Leads";
-import FormBuilder from "@/pages/workspace/FormBuilder";
 import ThirdPartyForms from "@/pages/workspace/ThirdPartyForms";
 import GmailSettings from "@/pages/workspace/GmailSettings";
 import AutomationSettings from "@/pages/workspace/AutomationSettings";
@@ -80,7 +79,6 @@ function App() {
                             <Route path="contacts" element={<Contacts />} />
                             <Route path="working-hours" element={<WorkingHours />} />
                             <Route path="leads" element={<Leads />} />
-                            <Route path="form-builder" element={<FormBuilder />} />
                             <Route path="third-party-forms" element={<ThirdPartyForms />} />
                             <Route path="gmail" element={<GmailSettings />} />
                             <Route path="automation" element={<AutomationSettings />} />

@@ -72,6 +72,7 @@ class WorkspaceResponse(BaseModel):
     is_activated: bool = False
     created_at: datetime
     updated_at: datetime
+    pending_forms: int = 0
 
     model_config = {"from_attributes": True}
 

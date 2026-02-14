@@ -33,6 +33,7 @@ class Message(Base):
     automated = Column(Boolean, default=False)
 
     status = Column(String(50), default="sent")  # sent, failed, delivered, read
+    is_read = Column(Boolean, default=False)  # Track if message has been read
     error_message = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

@@ -94,6 +94,9 @@ async def record_usage(
             detail=f"Insufficient stock. Available: {item.quantity} {item.unit}",
         )
 
+    # Check if this will cause low stock BEFORE deducting
+    will_be_low = (item.quantity - data.quantity_used) <= item.low_stock_threshold
+
     # Deduct stock
     item.quantity -= data.quantity_used
 
@@ -128,6 +131,25 @@ async def record_usage(
             "booking_id": str(data.booking_id) if data.booking_id else None,
         },
     )
+
+    # =======================================================================
+    # Emit inventory.low event if stock falls below threshold
+    # =======================================================================
+    if will_be_low:
+        from app.services.event_service import emit_inventory_low
+
+        await emit_inventory_low(
+            db=db,
+            workspace_id=workspace_id,
+            item_id=item.id,
+            inventory_data={
+                "item_name": item.name,
+                "current_quantity": item.quantity,
+                "threshold": item.low_stock_threshold,
+                "unit": item.unit,
+                "vendor_email": item.vendor_email,
+            },
+        )
 
     await db.commit()
     await db.refresh(usage)

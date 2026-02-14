@@ -220,6 +220,7 @@ async def _get_conversation_metrics(
     db: AsyncSession, workspace_id: UUID, now: datetime
 ) -> dict:
     hour_ago = now - timedelta(hours=1)
+    day_ago = now - timedelta(days=1)
 
     queries = {
         "new_inquiries": select(func.count(Conversation.id)).where(
@@ -236,7 +237,7 @@ async def _get_conversation_metrics(
         .where(
             Conversation.workspace_id == workspace_id,
             Message.direction == "inbound",
-            Message.created_at >= hour_ago,
+            Message.is_read == False,
         ),
     }
 
@@ -245,8 +246,19 @@ async def _get_conversation_metrics(
         res = await db.execute(query)
         results[key] = res.scalar() or 0
 
-    # Missed messages logic is same as new_inquiries for now
-    results["missed_messages"] = results["new_inquiries"]
+    # Missed messages: unread inbound messages from more than 1 hour ago (needs attention)
+    missed_query = (
+        select(func.count(Message.id))
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .where(
+            Conversation.workspace_id == workspace_id,
+            Message.direction == "inbound",
+            Message.is_read == False,
+            Message.created_at < hour_ago,
+        )
+    )
+    res = await db.execute(missed_query)
+    results["missed_messages"] = res.scalar() or 0
     return results
 
 

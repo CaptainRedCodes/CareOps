@@ -12,7 +12,6 @@ import {
     UserCheck,
     Clock,
     UsersRound,
-    FormInput,
     Mail,
     Zap,
     Globe
@@ -94,13 +93,6 @@ export default function Sidebar() {
             href: `/workspace/${workspaceId}/inventory`,
             icon: Package,
             permission: "inventory"
-        },
-        {
-            name: "Form Builder",
-            href: `/workspace/${workspaceId}/form-builder`,
-            icon: FormInput,
-            permission: null,
-            adminOnly: true
         },
         {
             name: "Third-Party Forms",

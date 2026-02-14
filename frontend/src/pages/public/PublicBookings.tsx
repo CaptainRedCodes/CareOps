@@ -92,7 +92,7 @@ const PublicBookings: React.FC = () => {
       const dateStr = date.toISOString().split('T')[0];
       
       const response = await fetch(
-        `${API_URL}/public/bookings/services/${selectedService.id}/available-slots?date=${dateStr}`
+        `${API_URL}/public/bookings/services/${selectedService.id}/available-slots?date=${dateStr}&workspace_id=${workspaceId}`
       );
       
       if (!response.ok) {

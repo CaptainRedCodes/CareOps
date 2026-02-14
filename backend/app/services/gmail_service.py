@@ -29,6 +29,7 @@ from app.models.workspace import Workspace
 from app.models.contact import Contact
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.models.communication import CommunicationIntegration
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -157,6 +158,9 @@ class GmailService:
 
         # Setup push notifications (watch)
         await self.setup_watch(integration)
+
+        # Create/update CommunicationIntegration for email channel
+        await self._sync_communication_integration(workspace_id, email_address)
 
         return integration
 
@@ -501,9 +505,28 @@ class GmailService:
 
             integration.is_active = False
             await self.db.commit()
+
+            # Also deactivate CommunicationIntegration for email channel
+            await self._deactivate_communication_integration(workspace_id)
+
             return True
 
         return False
+
+    async def _deactivate_communication_integration(self, workspace_id: UUID) -> None:
+        """Deactivate CommunicationIntegration for email channel when Gmail is disconnected"""
+        result = await self.db.execute(
+            select(CommunicationIntegration).where(
+                CommunicationIntegration.workspace_id == workspace_id,
+                CommunicationIntegration.channel == "email",
+                CommunicationIntegration.provider == "gmail",
+            )
+        )
+        integration = result.scalar_one_or_none()
+
+        if integration:
+            integration.is_active = False
+            await self.db.commit()
 
     async def get_integration(self, workspace_id: UUID) -> Optional[GmailIntegration]:
         """Get Gmail integration for workspace"""
@@ -513,3 +536,36 @@ class GmailService:
             )
         )
         return result.scalar_one_or_none()
+
+    async def _sync_communication_integration(
+        self, workspace_id: UUID, email_address: str
+    ) -> None:
+        """Sync Gmail integration with CommunicationIntegration for email channel"""
+        result = await self.db.execute(
+            select(CommunicationIntegration).where(
+                CommunicationIntegration.workspace_id == workspace_id,
+                CommunicationIntegration.channel == "email",
+            )
+        )
+        existing = result.scalar_one_or_none()
+
+        config = {
+            "email_address": email_address,
+            "connected_via": "gmail",
+        }
+
+        if existing:
+            existing.provider = "gmail"
+            existing.is_active = True
+            existing.config = config
+        else:
+            comm_integration = CommunicationIntegration(
+                workspace_id=workspace_id,
+                channel="email",
+                provider="gmail",
+                is_active=True,
+                config=config,
+            )
+            self.db.add(comm_integration)
+
+        await self.db.commit()

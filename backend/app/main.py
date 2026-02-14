@@ -58,7 +58,16 @@ async def lifespan(app: FastAPI):
     register_all_handlers()
     logger.info("Event-driven architecture initialized")
 
+    # Start background scheduler for booking reminders
+    from app.services.reminder_scheduler import start_scheduler, stop_scheduler
+
+    scheduler_task = await start_scheduler(app)
+    logger.info("Booking reminder scheduler started")
+
     yield
+
+    # Stop scheduler
+    await stop_scheduler(app)
 
     # Shutdown
     logger.info("Shutting down CareOps API...")
@@ -75,9 +84,14 @@ app = FastAPI(
 
 app.state.limiter = limiter
 
+# Get CORS origins from config
+cors_origins = (
+    settings.CORS_ORIGINS.split(",") if settings.CORS_ORIGINS != "*" else ["*"]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

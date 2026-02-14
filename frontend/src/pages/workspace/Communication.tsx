@@ -29,14 +29,18 @@ interface Contact {
 }
 
 interface Conversation {
-    id: string;
+    conversation_id: string;
     contact_id: string;
-    workspace_id: string;
+    workspace_id?: string;
     status: 'active' | 'closed' | 'waiting';
     automation_paused: boolean;
     last_message_at: string;
-    created_at: string;
-    contact: Contact;
+    created_at?: string;
+    contact_name: string;
+    contact_email?: string;
+    contact_phone?: string;
+    last_message_from?: string;
+    last_message_preview?: string;
     unread_count?: number;
 }
 
@@ -45,11 +49,13 @@ interface Message {
     conversation_id: string;
     channel: 'email' | 'sms';
     direction: 'inbound' | 'outbound';
-    content: string;
+    body: string;
     subject?: string;
-    sent_at: string;
-    is_automated: boolean;
+    sender?: string;
+    recipient?: string;
+    created_at: string;
     sent_by_staff: boolean;
+    automated: boolean;
 }
 
 const Communication: React.FC = () => {
@@ -76,11 +82,11 @@ const Communication: React.FC = () => {
     // Fetch messages when conversation is selected
     useEffect(() => {
         if (activeConversation) {
-            fetchMessages(activeConversation.id);
+            fetchMessages(activeConversation.conversation_id);
             // Auto-detect channel based on contact info
-            if (activeConversation.contact.email) {
+            if (activeConversation.contact_email) {
                 setSelectedChannel('email');
-            } else if (activeConversation.contact.phone) {
+            } else if (activeConversation.contact_phone) {
                 setSelectedChannel('sms');
             }
         }
@@ -113,14 +119,14 @@ const Communication: React.FC = () => {
         if (!messageInput.trim() || !activeConversation) return;
 
         try {
-            const payload = {
-                content: messageInput,
+        const payload = {
+                body: messageInput,
                 channel: selectedChannel,
                 ...(selectedChannel === 'email' && emailSubject ? { subject: emailSubject } : {})
             };
 
             const response = await api.post(
-                `/workspaces/${workspaceId}/conversations/${activeConversation.id}/reply`,
+                `/workspaces/${workspaceId}/conversations/${activeConversation.conversation_id}/reply`,
                 payload
             );
 
@@ -141,7 +147,7 @@ const Communication: React.FC = () => {
         if (!activeConversation) return;
 
         try {
-            await api.patch(`/workspaces/${workspaceId}/conversations/${activeConversation.id}/close`);
+            await api.patch(`/workspaces/${workspaceId}/conversations/${activeConversation.conversation_id}/close`);
             setActiveConversation({ ...activeConversation, status: 'closed' });
             fetchInbox();
         } catch (error) {
@@ -153,7 +159,7 @@ const Communication: React.FC = () => {
         if (!activeConversation) return;
 
         try {
-            await api.patch(`/workspaces/${workspaceId}/conversations/${activeConversation.id}/reopen`);
+            await api.patch(`/workspaces/${workspaceId}/conversations/${activeConversation.conversation_id}/reopen`);
             setActiveConversation({ ...activeConversation, status: 'active' });
             fetchInbox();
         } catch (error) {
@@ -188,14 +194,14 @@ const Communication: React.FC = () => {
         if (!searchQuery) return true;
         const searchLower = searchQuery.toLowerCase();
         return (
-            conv.contact.name.toLowerCase().includes(searchLower) ||
-            conv.contact.email?.toLowerCase().includes(searchLower) ||
-            conv.contact.phone?.includes(searchQuery)
+            conv.contact_name?.toLowerCase().includes(searchLower) ||
+            conv.contact_email?.toLowerCase().includes(searchLower) ||
+            conv.contact_phone?.includes(searchQuery)
         );
     });
 
-    const canSendEmail = activeConversation?.contact.email;
-    const canSendSMS = activeConversation?.contact.phone;
+    const canSendEmail = activeConversation?.contact_email;
+    const canSendSMS = activeConversation?.contact_phone;
 
     return (
         <div className="flex h-full w-full bg-background overflow-hidden">
@@ -245,7 +251,7 @@ const Communication: React.FC = () => {
                         ) : (
                             filteredConversations.map((conv) => (
                                 <div
-                                    key={conv.id}
+                                    key={conv.conversation_id}
                                     onClick={() => setActiveConversation(conv)}
                                     className={`p-4 border-b border-border/50 cursor-pointer hover:bg-secondary/30 transition-colors ${
                                         activeConversation?.id === conv.id
@@ -254,17 +260,17 @@ const Communication: React.FC = () => {
                                     }`}
                                 >
                                     <div className="flex justify-between items-start mb-1">
-                                        <h3 className={`font-medium text-sm ${
+                                    <h3 className={`font-medium text-sm ${
                                             conv.unread_count ? 'text-foreground font-semibold' : 'text-foreground/80'
                                         }`}>
-                                            {conv.contact.name}
+                                            {conv.contact_name || 'Unknown Contact'}
                                         </h3>
                                         <span className="text-xs text-muted-foreground">
                                             {formatTime(conv.last_message_at)}
                                         </span>
                                     </div>
                                     <p className="text-xs text-muted-foreground mb-2 line-clamp-1">
-                                        {conv.contact.email || conv.contact.phone}
+                                        {conv.contact_email || conv.contact_phone || 'No contact info'}
                                     </p>
                                     <div className="flex justify-between items-center">
                                         <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wide font-medium ${getStatusColor(conv.status)}`}>
@@ -287,14 +293,14 @@ const Communication: React.FC = () => {
                         <div className="h-16 border-b border-border flex items-center justify-between px-6 bg-card/50 backdrop-blur-sm z-10">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-                                    {activeConversation.contact.name.charAt(0)}
+                                    {activeConversation.contact_name?.charAt(0) || '?'}
                                 </div>
                                 <div>
                                     <h3 className="font-semibold text-foreground">
-                                        {activeConversation.contact.name}
+                                        {activeConversation.contact_name || 'Unknown'}
                                     </h3>
                                     <p className="text-xs text-muted-foreground">
-                                        {activeConversation.contact.email || activeConversation.contact.phone}
+                                        {activeConversation.contact_email || activeConversation.contact_phone || 'No contact info'}
                                     </p>
                                 </div>
                             </div>
@@ -340,15 +346,15 @@ const Communication: React.FC = () => {
                         <div className="flex-1 overflow-y-auto p-6 space-y-4 dot-grid">
                             {messages.map((message, index) => {
                                 const showDate = index === 0 || 
-                                    new Date(messages[index - 1].sent_at).toDateString() !== 
-                                    new Date(message.sent_at).toDateString();
+                                    new Date(messages[index - 1].created_at).toDateString() !== 
+                                    new Date(message.created_at).toDateString();
 
                                 return (
                                     <React.Fragment key={message.id}>
                                         {showDate && (
                                             <div className="flex justify-center my-4">
                                                 <span className="text-xs text-muted-foreground bg-secondary/50 px-3 py-1 rounded-full">
-                                                    {new Date(message.sent_at).toLocaleDateString('en-US', {
+                                                    {new Date(message.created_at).toLocaleDateString('en-US', {
                                                         weekday: 'long',
                                                         year: 'numeric',
                                                         month: 'long',
@@ -368,14 +374,14 @@ const Communication: React.FC = () => {
                                                         {message.subject}
                                                     </p>
                                                 )}
-                                                <p className="whitespace-pre-wrap">{message.content}</p>
+                                                <p className="whitespace-pre-wrap">{message.body}</p>
                                                 <div className={`text-[10px] mt-1 flex items-center gap-2 justify-end ${
                                                     message.direction === 'outbound'
                                                         ? 'text-primary-foreground/70'
                                                         : 'text-muted-foreground'
                                                 }`}>
                                                     <span>
-                                                        {new Date(message.sent_at).toLocaleTimeString('en-US', {
+                                                        {new Date(message.created_at).toLocaleTimeString('en-US', {
                                                             hour: 'numeric',
                                                             minute: '2-digit'
                                                         })}
@@ -385,7 +391,7 @@ const Communication: React.FC = () => {
                                                     ) : (
                                                         <MessageCircle className="w-3 h-3" />
                                                     )}
-                                                    {message.is_automated && (
+                                                    {message.automated && (
                                                         <span className="text-[9px]">(auto)</span>
                                                     )}
                                                 </div>
@@ -454,14 +460,14 @@ const Communication: React.FC = () => {
                     <div className="w-72 border-l border-border bg-card hidden xl:block p-6">
                         <div className="text-center mb-6">
                             <div className="w-20 h-20 bg-primary/10 rounded-full mx-auto flex items-center justify-center text-primary text-2xl font-bold mb-3">
-                                {activeConversation.contact.name.charAt(0)}
+                                {activeConversation.contact_name?.charAt(0) || '?'}
                             </div>
-                            <h3 className="font-heading font-semibold text-lg">{activeConversation.contact.name}</h3>
-                            {activeConversation.contact.email && (
-                                <p className="text-sm text-muted-foreground">{activeConversation.contact.email}</p>
+                            <h3 className="font-heading font-semibold text-lg">{activeConversation.contact_name || 'Unknown'}</h3>
+                            {activeConversation.contact_email && (
+                                <p className="text-sm text-muted-foreground">{activeConversation.contact_email}</p>
                             )}
-                            {activeConversation.contact.phone && (
-                                <p className="text-sm text-muted-foreground">{activeConversation.contact.phone}</p>
+                            {activeConversation.contact_phone && (
+                                <p className="text-sm text-muted-foreground">{activeConversation.contact_phone}</p>
                             )}
                             <div className={`mt-3 inline-block px-3 py-1 rounded-full text-xs font-medium uppercase tracking-wide ${getStatusColor(activeConversation.status)}`}>
                                 {activeConversation.status}
